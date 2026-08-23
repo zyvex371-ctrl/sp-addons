@@ -18,8 +18,7 @@ def obter_addons_existentes():
         return [item['title'] for item in res.json()]
     return []
 
-def obter_arquivo_bedrock_valido(project_id):
-    """Filtra EXCLUSIVAMENTE arquivos .mcaddon e .mcpack para abrir direto no Minecraft."""
+def obter_arquivo_bedrock(project_id):
     try:
         url = f"https://api.modrinth.com/v2/project/{project_id}/version"
         res = requests.get(url, headers={"User-Agent": "SPAddonsBot/1.0"})
@@ -29,69 +28,96 @@ def obter_arquivo_bedrock_valido(project_id):
                 for f in ver.get("files", []):
                     filename = f.get("filename", "").lower()
                     if filename.endswith(".mcaddon") or filename.endswith(".mcpack"):
-                        return f.get("url"), filename
+                        return f.get("url")
     except Exception as e:
-        print(f"Erro no projeto {project_id}: {e}")
-    return None, None
+        print(f"Erro ao obter versão {project_id}: {e}")
+    return None
 
 def classificar_categoria(titulo, descricao, tags):
-    """Classifica automaticamente entre Add-ons, Texturas e Mapas."""
     texto = (titulo + " " + descricao + " " + " ".join(tags)).lower()
-    if "texture" in texto or "resource" in texto or "textura" in texto:
+    if "texture" in texto or "resource" in texto or "textura" in texto or "pack" in texto:
         return "Texturas"
-    elif "map" in texto or "world" in texto or "mapa" in texto:
-        return "Mapas"
-    else:
-        return "Add-ons Bedrock"
+    return "Add-ons Bedrock"
 
-def buscar_novos_addons():
-    url = 'https://api.modrinth.com/v2/search?limit=30&index=updated'
+def buscar_items_api(offset=0):
+    url = f'https://api.modrinth.com/v2/search?limit=100&offset={offset}&index=relevance'
     res = requests.get(url, headers={"User-Agent": "SPAddonsBot/1.0"})
     if res.status_code == 200:
         return res.json().get("hits", [])
     return []
 
-def salvar_addon_no_supabase(addon):
+def salvar_no_supabase(addon):
     url = f"{SUPABASE_URL}/rest/v1/addons"
     res = requests.post(url, headers=headers, json=addon)
     if res.status_code in [200, 201]:
-        print(f"✅ Bedrock válido salvo: {addon['title']} [{addon['category']}]")
+        print(f"✅ Cadastrado: {addon['title']} [{addon['category']}]")
 
 def executar_bot():
     existentes = obter_addons_existentes()
-    novos = buscar_novos_addons()
-    postados = 0
+    total_no_banco = len(existentes)
     
-    for item in novos:
-        titulo = item.get("title", "").strip()
-        if titulo in existentes:
-            continue
+    # Se tiver menos de 50 itens, faz carga inicial (~30 de cada).
+    # Depois, pega 2 de cada a cada 25 minutos.
+    limite_addons = 30 if total_no_banco < 50 else 2
+    limite_texturas = 30 if total_no_banco < 50 else 2
+    
+    addons_add = 0
+    texturas_add = 0
+    
+    # Percorre até 500 resultados buscando itens não cadastrados
+    for page in range(0, 500, 100):
+        if addons_add >= limite_addons and texturas_add >= limite_texturas:
+            break
             
-        project_id = item.get("project_id")
-        download_url, filename = obter_arquivo_bedrock_valido(project_id)
-        
-        # Descarta arquivos incompatíveis (.jar, .zip, etc)
-        if not download_url:
-            continue
+        items = buscar_items_api(offset=page)
+        if not items:
+            break
             
-        desc = item.get("description", "Conteúdo incrível para Minecraft Bedrock.")
-        tags = item.get("categories", [])
-        categoria = classificar_categoria(titulo, desc, tags)
-        
-        novo_addon = {
-            "title": titulo,
-            "category": categoria,
-            "version": "Bedrock Edition",
-            "author": item.get("author", "Comunidade"),
-            "description": desc,
-            "image_url": item.get("icon_url") or "https://via.placeholder.com/400x200",
-            "download_url": download_url
-        }
-        
-        salvar_addon_no_supabase(novo_addon)
-        postados += 1
+        for item in items:
+            if addons_add >= limite_addons and texturas_add >= limite_texturas:
+                break
+                
+            titulo = item.get("title", "").strip()
+            if titulo in existentes:
+                continue
+                
+            project_id = item.get("project_id")
+            download_url = obter_arquivo_bedrock(project_id)
+            
+            if not download_url:
+                continue
+                
+            desc = item.get("description", "Conteúdo para Minecraft Bedrock.")
+            tags = item.get("categories", [])
+            cat = classificar_categoria(titulo, desc, tags)
+            
+            if cat == "Add-ons Bedrock" and addons_add < limite_addons:
+                salvar_no_supabase({
+                    "title": titulo,
+                    "category": "Add-ons Bedrock",
+                    "version": "Bedrock",
+                    "author": item.get("author", "Comunidade"),
+                    "description": desc,
+                    "image_url": item.get("icon_url") or "https://via.placeholder.com/400x200",
+                    "download_url": download_url
+                })
+                existentes.append(titulo)
+                addons_add += 1
+                
+            elif cat == "Texturas" and texturas_add < limite_texturas:
+                salvar_no_supabase({
+                    "title": titulo,
+                    "category": "Texturas",
+                    "version": "Bedrock",
+                    "author": item.get("author", "Comunidade"),
+                    "description": desc,
+                    "image_url": item.get("icon_url") or "https://via.placeholder.com/400x200",
+                    "download_url": download_url
+                })
+                existentes.append(titulo)
+                texturas_add += 1
 
-    print(f"🎉 Finalizado! {postados} itens Bedrock (.mcaddon / .mcpack) adicionados.")
+    print(f"🎉 Finalizado! Adicionados {addons_add} Addons e {texturas_add} Texturas.")
 
 if __name__ == "__main__":
     executar_bot()
