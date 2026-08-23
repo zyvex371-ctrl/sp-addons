@@ -220,6 +220,993 @@
         <input type="url" id="pubImageUrl" placeholder="OU cole a URL da Imagem">
       </div>
 
+      <!-- ARQUIVO DO MOD (.mcpack, .mcaddon, .mcworld) -->
+      <div class="form-group">
+        <label>Arquivo do Addon / Mod</label>
+        <label class="file-input-btn" style="border-color:#10b981; color:#34d399;">
+          📦 Selecionar Arquivo (.mcpack / .mcaddon / .mcworld)
+          <input type="file" id="pubModFile" accept=".mcpack,.mcaddon,.mcworld" onchange="previewFileName(this, 'modFileName')">
+        </label>
+        <div id="modFileName" style="font-size:0.75rem; color:#10b981; margin-bottom:4px;"></div>
+        <input type="url" id="pubDownloadUrl" placeholder="OU cole o Link Direto de Download">
+      </div>
+
+      <!-- GALERIA (No máximo 6 fotos) -->
+      <div class="form-group">
+        <label>Galeria de Fotos (No máximo 6)</label>
+        <label class="file-input-btn">
+          📷 Escolher até 6 Fotos da Galeria
+          <input type="file" id="pubGalleryFiles" accept="image/*" multiple onchange="checkGalleryFiles(this)">
+        </label>
+        <div id="galleryCount" style="font-size:0.75rem; color:#10b981;"></div>
+      </div>
+
+      <!-- VÍDEO DO MOD -->
+      <div class="form-group">
+        <label>Vídeo do Mod (Galeria do Celular ou YouTube)</label>
+        <label class="file-input-btn" style="border-color:#f59e0b; color:#fbbf24;">
+          🎬 Escolher Vídeo da Galeria
+          <input type="file" id="pubVideoFile" accept="video/*" onchange="previewFileName(this, 'videoFileName')">
+        </label>
+        <div id="videoFileName" style="font-size:0.75rem; color:#10b981; margin-bottom:4px;"></div>
+        <input type="url" id="pubVideoUrl" placeholder="OU cole o Link do YouTube">
+      </div>
+
+      <div class="form-group">
+        <label>Descrição</label>
+        <textarea id="pubDesc" placeholder="Descreva o que o mod adiciona no jogo..." rows="3"></textarea>
+      </div>
+
+      <div id="statusMsg" class="status-msg"></div>
+
+      <div class="modal-actions">
+        <button class="btn-cancel" onclick="toggleModal(false)">Cancelar</button>
+        <button id="btnSubmitPub" class="btn-publish-open" onclick="publicarAddon()">Enviar e Publicar</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://dsezdcusbhitmzjipvgy.supabase.co';
+    const SUPABASE_ANON_KEY = 'sb_publishable_Kodxv-JTmas50sItp-s3Gg_R8GMX5l_';
+    let allAddons = [];
+    let currentCategory = 'Todos';
+    let currentAddon = null;
+
+    function getMyCreatedIds() {
+      return JSON.parse(localStorage.getItem('my_created_addons') || '[]');
+    }
+
+    function saveMyCreatedId(id) {
+      const ids = getMyCreatedIds();
+      ids.push(id);
+      localStorage.setItem('my_created_addons', JSON.stringify(ids));
+    }
+
+    async function fetchAddons() {
+      try {
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/addons?select=*`, {
+          headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+        });
+        allAddons = await response.json();
+        filterAddons();
+      } catch (err) {
+        document.getElementById('addonCount').innerText = "Erro ao carregar conteúdos.";
+      }
+    }
+
+    function setCategory(category, button) {
+      currentCategory = category;
+      document.querySelectorAll('.cat-btn').forEach(btn => btn.classList.remove('active'));
+      button.classList.add('active');
+      filterAddons();
+    }
+
+    function filterAddons() {
+      const query = document.getElementById('searchInput').value.toLowerCase();
+      const filtered = allAddons.filter(item => {
+        const matchesCategory = (currentCategory === 'Todos') || (item.category === currentCategory);
+        const matchesSearch = item.title.toLowerCase().includes(query) || (item.description && item.description.toLowerCase().includes(query));
+        return matchesCategory && matchesSearch;
+      });
+      renderAddons(filtered);
+    }
+
+    function renderAddons(addons) {
+      const container = document.getElementById('addons-container');
+      const countEl = document.getElementById('addonCount');
+      container.innerHTML = '';
+      countEl.innerText = `${addons.length} conteúdos em "${currentCategory}"`;
+
+      if (addons.length === 0) {
+        container.innerHTML = '<p style="text-align:center; color:#6b7280; padding:30px;">Nenhum conteúdo encontrado.</p>';
+        return;
+      }
+
+      addons.forEach(addon => {
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.onclick = () => openDetails(addon);
+        card.innerHTML = `
+          <img src="${addon.image_url || 'https://via.placeholder.com/100'}" alt="${addon.title}">
+          <div class="card-info">
+            <div class="card-title">${addon.title}</div>
+            <div class="card-author">por ${addon.author || 'Comunidade'}</div>
+            <div class="card-desc">${addon.description || 'Sem descrição.'}</div>
+            <span class="tag">${addon.category || 'Addon'}</span>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function openDetails(addon) {
+      currentAddon = addon;
+      document.getElementById('d-img').src = addon.image_url || 'https://via.placeholder.com/100';
+      document.getElementById('d-category').innerText = addon.category || 'ADDON';
+      document.getElementById('d-title').innerText = addon.title;
+      document.getElementById('d-author').innerText = addon.author || 'Comunidade';
+      document.getElementById('d-desc').innerText = addon.description || 'Sem descrição cadastrada.';
+      
+      const downloadBtn = document.getElementById('d-download');
+      downloadBtn.href = addon.download_url;
+
+      // Galeria Visual
+      const galleryBox = document.getElementById('d-gallery');
+      galleryBox.innerHTML = '';
+      let galleryList = addon.gallery_urls || [];
+      if (typeof galleryList === 'string') {
+        try { galleryList = JSON.parse(galleryList); } catch(e){ galleryList = []; }
+      }
+      if (galleryList.length > 0) {
+        galleryList.forEach(url => {
+          const img = document.createElement('img');
+          img.src = url;
+          galleryBox.appendChild(img);
+        });
+      } else {
+        galleryBox.innerHTML = '<p style="color:#6b7280; font-size:0.85rem;">Nenhuma foto adicional cadastrada.</p>';
+      }
+
+      // Vídeo
+      const videoBox = document.getElementById('d-video-box');
+      videoBox.innerHTML = '';
+      if (addon.video_url) {
+        const embedUrl = getYouTubeEmbedUrl(addon.video_url);
+        if (embedUrl) {
+          videoBox.innerHTML = `<div class="video-container"><iframe src="${embedUrl}" allowfullscreen></iframe></div>`;
+        } else {
+          videoBox.innerHTML = `<div class="video-container"><video src="${addon.video_url}" controls></video></div>`;
+        }
+      } else {
+        videoBox.innerHTML = '<p style="color:#6b7280; font-size:0.85rem;">Nenhum vídeo cadastrado para este mod.</p>';
+      }
+
+      // Botão Excluir
+      const myIds = getMyCreatedIds();
+      document.getElementById('d-delete-btn').style.display = myIds.includes(addon.id) ? 'block' : 'none';
+
+      document.getElementById('catalog-page').style.display = 'none';
+      document.getElementById('details-page').style.display = 'block';
+      window.scrollTo(0, 0);
+    }
+
+    function switchTab(tabName, btn) {
+      document.querySelectorAll('.tab-item').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById(`tab-${tabName}`).classList.add('active');
+    }
+
+    function getYouTubeEmbedUrl(url) {
+      const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+      const match = url.match(regExp);
+      return (match && match[2].length === 11) ? `https://www.youtube.com/embed/${match[2]}` : null;
+    }
+
+    function showCatalog() {
+      document.getElementById('details-page').style.display = 'none';
+      document.getElementById('catalog-page').style.display = 'block';
+    }
+
+    function toggleModal(show) {
+      document.getElementById('modalOverlay').style.display = show ? 'flex' : 'none';
+    }
+
+    function previewFileName(input, targetId) {
+      if (input.files && input.files[0]) {
+        const fileName = input.files[0].name.toLowerCase();
+        
+        // Se for o campo do Mod, valida a extensão estritamente
+        if (input.id === 'pubModFile') {
+          const eValido = fileName.endsWith('.mcaddon') || fileName.endsWith('.mcpack') || fileName.endsWith('.mcworld');
+          if (!eValido) {
+            alert("⚠️ Por favor, selecione apenas arquivos do Minecraft (.mcaddon, .mcpack ou .mcworld)!");
+            input.value = "";
+            document.getElementById(targetId).innerText = "";
+            return;
+          }
+        }
+        
+        document.getElementById(targetId).innerText = `Selecionado: ${input.files[0].name}`;
+      }
+    }
+
+    function checkGalleryFiles(input) {
+      if (input.files && input.files.length > 6) {
+        alert("⚠️ Você só pode selecionar no máximo 6 fotos para a galeria!");
+        input.value = "";
+        document.getElementById('galleryCount').innerText = "";
+        return;
+      }
+      if (input.files) {
+        document.getElementById('galleryCount').innerText = `${input.files.length} foto(s) selecionada(s).`;
+      }
+    }
+
+    // Upload direto para o Supabase Storage
+    async function uploadToStorage(file) {
+      const cleanName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const fileName = `${Date.now()}_${cleanName}`;
+      
+      const res = await fetch(`${SUPABASE_URL}/storage/v1/object/addons-media/${fileName}`, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': file.type || 'application/octet-stream'
+        },
+        body: file
+      });
+
+      if (res.ok) {
+        return `${SUPABASE_URL}/storage/v1/object/public/addons-media/${fileName}`;
+      } else {
+        const errorText = await res.text();
+        throw new Error(`Falha ao subir arquivo ${file.name}: ${errorText}`);
+      }
+    }
+
+    async function publicarAddon() {
+      const title = document.getElementById('pubTitle').value.trim();
+      const author = document.getElementById('pubAuthor').value.trim() || 'Comunidade';
+      const category = document.getElementById('pubCategory').value;
+      const description = document.getElementById('pubDesc').value.trim();
+
+      const imageFileInput = document.getElementById('pubImageFile');
+      let image_url = document.getElementById('pubImageUrl').value.trim();
+
+      const modFileInput = document.getElementById('pubModFile');
+      let download_url = document.getElementById('pubDownloadUrl').value.trim();
+
+      const videoFileInput = document.getElementById('pubVideoFile');
+      let video_url = document.getElementById('pubVideoUrl').value.trim();
+
+      const galleryFilesInput = document.getElementById('pubGalleryFiles');
+
+      const status = document.getElementById('statusMsg');
+      const submitBtn = document.getElementById('btnSubmitPub');
+
+      if (!title) {
+        alert("Por favor, digite o título do Addon!");
+        return;
+      }
+
+      submitBtn.disabled = true;
+      status.style.color = "#34d399";
+      status.innerText = "⏳ Enviando arquivos... Aguarde um instante!";
+
+      try {
+        // Upload Capa
+        if (imageFileInput.files && imageFileInput.files[0]) {
+          status.innerText = "⏳ Enviando Imagem de Capa...";
+          const uploadedUrl = await uploadToStorage(imageFileInput.files[0]);
+          if (uploadedUrl) image_url = uploadedUrl;
+        }
+
+        // Upload Arquivo do Mod (.mcaddon / .mcpack / .mcworld)
+        if (modFileInput.files && modFileInput.files[0]) {
+          status.innerText = "⏳ Enviando arquivo do Mod (pode demorar alguns segundos)...";
+          const uploadedModUrl = await uploadToStorage(modFileInput.files[0]);
+          if (uploadedModUrl) download_url = uploadedModUrl;
+        }
+
+        if (!download_url) {
+          alert("Atenção: Escolha um arquivo do mod ou digite a URL de download!");
+          submitBtn.disabled = false;
+          status.innerText = "";
+          return;
+        }
+
+        // Upload Vídeo da Galeria (se selecionado)
+        if (videoFileInput.files && videoFileInput.files[0]) {
+          status.innerText = "⏳ Enviando arquivo de vídeo...";
+          const uploadedVideoUrl = await uploadToStorage(videoFileInput.files[0]);
+          if (uploadedVideoUrl) video_url = uploadedVideoUrl;
+        }
+
+        // Upload Galeria (até 6 fotos)
+        let gallery_urls = [];
+        if (galleryFilesInput.files && galleryFilesInput.files.length > 0) {
+          status.innerText = "⏳ Enviando fotos da galeria...";
+          const totalFiles = Math.min(galleryFilesInput.files.length, 6);
+          for (let i = 0; i < totalFiles; i++) {
+            const gUrl = await uploadToStorage(galleryFilesInput.files[i]);
+            if (gUrl) gallery_urls.push(gUrl);
+          }
+        }
+
+        status.innerText = "⏳ Salvando dados no catálogo...";
+
+        const novo = {
+          title, author, category, description, video_url,
+          image_url: image_url || 'https://via.placeholder.com/400x200',
+          download_url,
+          gallery_urls,
+          version: 'Bedrock'
+        };
+
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/addons`, {
+          method: 'POST',
+          headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation'
+          },
+          body: JSON.stringify(novo)
+        });
+
+        if (res.ok) {
+          const created = await res.json();
+          if (created && created.length > 0) saveMyCreatedId(created[0].id);
+          alert("🎉 Conteúdo publicado com sucesso!");
+          toggleModal(false);
+          fetchAddons();
+        } else {
+          const errData = await res.text();
+          alert("Erro ao salvar no banco de dados: " + errData);
+        }
+      } catch (e) {
+        status.style.color = "#ef4444";
+        status.innerText = "❌ Erro no envio!";
+        alert("Erro no envio do arquivo: " + e.message);
+      } finally {
+        submitBtn.disabled = false;
+      }
+    }
+
+    // Função para Excluir o próprio Addon
+    async function excluirAddonAtual() {
+      if (!currentAddon || !confirm("Tem certeza de que deseja excluir este addon permanentemente?")) {
+        return;
+      }
+
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/addons?id=eq.${currentAddon.id}`, {
+        method: 'DELETE',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+        }
+      });
+
+      if (res.ok) {
+        alert("Addon excluído com sucesso!");
+        showCatalog();
+        fetchAddons();
+      } else {
+        alert("Erro ao excluir o addon.");
+      }
+    }
+
+    fetchAddons();
+  </script>
+</body>
+</html>
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="logo">SP Addons <span>BEDROCK</span></div>
+    <button class="btn-publish-open" onclick="toggleModal(true)">+ Publicar</button>
+  </header>
+
+  <!-- PÁGINA 1: CATÁLOGO -->
+  <div id="catalog-page">
+    <div class="categories">
+      <button class="cat-btn active" onclick="setCategory('Todos', this)">Todos</button>
+      <button class="cat-btn" onclick="setCategory('Add-ons Bedrock', this)">Add-ons Bedrock</button>
+      <button class="cat-btn" onclick="setCategory('Texturas', this)">Texturas</button>
+      <button class="cat-btn" onclick="setCategory('Mapas', this)">Mapas</button>
+    </div>
+
+    <div class="search-box">
+      <input type="text" id="searchInput" placeholder="Buscar conteúdos..." onkeyup="filterAddons()">
+    </div>
+
+    <div class="counter" id="addonCount">Carregando conteúdos...</div>
+
+    <div class="addons-list" id="addons-container"></div>
+  </div>
+
+  <!-- PÁGINA 2: DETALHES DO ADDON -->
+  <div id="details-page">
+    <button class="btn-back" onclick="showCatalog()">← VOLTAR PARA O CATÁLOGO</button>
+
+    <div class="details-card">
+      <div class="details-header">
+        <img id="d-img" class="details-img" src="" alt="Capa">
+        <div class="details-meta">
+          <div class="details-badges">
+            <span id="d-category" class="badge-cat">ADDONS</span>
+            <span class="badge-date">Atualizado recentemente</span>
+          </div>
+          <div id="d-title" class="details-title">Título do Addon</div>
+          <div class="details-author">Desenvolvido por <span id="d-author">Autor</span></div>
+          <div class="tags-row">
+            <span class="tag-pill">BEDROCK</span>
+            <span class="tag-pill">1.21.0+</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Botão de Download Direto -->
+      <a id="d-download" href="#" class="btn-download-big" download target="_blank">
+        <span>📥</span> Baixar Recurso
+      </a>
+
+      <!-- Botão de Excluir (Dono do Addon) -->
+      <button id="d-delete-btn" class="btn-delete-own" onclick="excluirAddonAtual()">🗑️ Excluir meu Addon</button>
+    </div>
+
+    <!-- Abas Internas da Tela de Detalhes -->
+    <div class="tab-bar">
+      <button class="tab-item active" onclick="switchTab('desc', this)">📄 Descrição</button>
+      <button class="tab-item" onclick="switchTab('gallery', this)">🖼️ Galeria Visual</button>
+      <button class="tab-item" onclick="switchTab('video', this)">🎥 Vídeo</button>
+    </div>
+
+    <div id="tab-desc" class="tab-content active">
+      <div id="d-desc" class="details-text">Descrição completa do addon...</div>
+    </div>
+
+    <div id="tab-gallery" class="tab-content">
+      <div id="d-gallery" class="gallery-grid"></div>
+    </div>
+
+    <div id="tab-video" class="tab-content">
+      <div id="d-video-box"></div>
+    </div>
+
+    <div class="verified-box">
+      <div class="verified-icon">🛡️</div>
+      <div>
+        <div class="verified-title">DOWNLOAD SEGURO E VERIFICADO</div>
+        <div class="verified-desc">No SP Addons todos os arquivos passam por checagem de integridade e varredura contra malwares.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DE PUBLICAÇÃO -->
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal">
+      <h2>Publicar Conteúdo</h2>
+      
+      <div class="form-group">
+        <label>Título e Autor</label>
+        <input type="text" id="pubTitle" placeholder="Ex: Ranzie Rise Addon" style="margin-bottom:6px;">
+        <input type="text" id="pubAuthor" placeholder="Seu Nome / Autor">
+      </div>
+
+      <div class="form-group">
+        <label>Categoria e Formato</label>
+        <select id="pubCategory">
+          <option value="Add-ons Bedrock">Add-ons Bedrock (.mcaddon)</option>
+          <option value="Texturas">Texturas (.mcpack)</option>
+          <option value="Mapas">Mapas (.mcworld)</option>
+        </select>
+      </div>
+
+      <!-- CAPA DA IMAGEM -->
+      <div class="form-group">
+        <label>Imagem da Capa</label>
+        <label class="file-input-btn">
+          🖼️ Escolher da Galeria do Celular
+          <input type="file" id="pubImageFile" accept="image/*" onchange="previewFileName(this, 'capaName')">
+        </label>
+        <div id="capaName" style="font-size:0.75rem; color:#10b981; margin-bottom:4px;"></div>
+        <input type="url" id="pubImageUrl" placeholder="OU cole a URL da Imagem">
+      </div>
+
+      <!-- ARQUIVO DO MOD (Apenas .mcaddon, .mcpack, .mcworld) -->
+      <div class="form-group">
+        <label>Arquivo do Addon / Mod</label>
+        <label class="file-input-btn" style="border-color:#10b981; color:#34d399;">
+          📦 Selecionar Arquivo (.mcpack / .mcaddon / .mcworld)
+          <input type="file" id="pubModFile" accept=".mcpack,.mcaddon,.mcworld" onchange="previewFileName(this, 'modFileName')">
+        </label>
+        <div id="modFileName" style="font-size:0.75rem; color:#10b981; margin-bottom:4px;"></div>
+        <input type="url" id="pubDownloadUrl" placeholder="OU cole o Link Direto de Download">
+      </div>
+
+      <!-- GALERIA (No máximo 6 fotos) -->
+      <div class="form-group">
+        <label>Galeria de Fotos (No máximo 6)</label>
+        <label class="file-input-btn">
+          📷 Escolher até 6 Fotos da Galeria
+          <input type="file" id="pubGalleryFiles" accept="image/*" multiple onchange="checkGalleryFiles(this)">
+        </label>
+        <div id="galleryCount" style="font-size:0.75rem; color:#10b981;"></div>
+      </div>
+
+      <!-- VÍDEO DO MOD -->
+      <div class="form-group">
+        <label>Vídeo do Mod (Galeria do Celular ou YouTube)</label>
+        <label class="file-input-btn" style="border-color:#f59e0b; color:#fbbf24;">
+          🎬 Escolher Vídeo da Galeria
+          <input type="file" id="pubVideoFile" accept="video/*" onchange="previewFileName(this, 'videoFileName')">
+        </label>
+        <div id="videoFileName" style="font-size:0.75rem; color:#10b981; margin-bottom:4px;"></div>
+        <input type="url" id="pubVideoUrl" placeholder="OU cole o Link do YouTube">
+      </div>
+
+      <div class="form-group">
+        <label>Descrição</label>
+        <textarea id="pubDesc" placeholder="Descreva o que o mod adiciona no jogo..." rows="3"></textarea>
+      </div>
+
+      <div id="statusMsg" class="status-msg"></div>
+
+      <div class="modal-actions">
+        <button class="btn-cancel" onclick="toggleModal(false)">Cancelar</button>
+        <button id="btnSubmitPub" class="btn-publish-open" onclick="publicarAddon()">Enviar e Publicar</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://dsezdcusbhitmzjipvgy.supabase.co';
+    const SUPABASE_ANON_KEY = 'sb_publishable_Kodxv-JTmas50sItp-s3Gg_R8GMX5l_';
+    let allAddons = [];
+    let currentCategory = 'Todos';
+    let currentAddon = null;
+
+    function getMyCreatedIds() {
+      return JSON.parse(localStorage.getItem('my_created_addons') || '[]');
+    }
+
+    function saveMyCreatedId(id) {
+      const ids = getMyCreatedIds();
+      ids.push(id);
+      localStorage.setItem('my_created_addons', JSON.stringify(ids));
+    }
+
+    async function fetchAddons() {
+      try {
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/addons?select=*`, {
+          headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+        });
+        allAddons = await response.json();
+        filterAddons();
+      } catch (err) {
+        document.getElementById('addonCount').innerText = "Erro ao carregar conteúdos.";
+      }
+    }
+
+    function setCategory(category, button) {
+      currentCategory = category;
+      document.querySelectorAll('.cat-btn').forEach(btn => btn.classList.remove('active'));
+      button.classList.add('active');
+      filterAddons();
+    }
+
+    function filterAddons() {
+      const query = document.getElementById('searchInput').value.toLowerCase();
+      const filtered = allAddons.filter(item => {
+        const matchesCategory = (currentCategory === 'Todos') || (item.category === currentCategory);
+        const matchesSearch = item.title.toLowerCase().includes(query) || (item.description && item.description.toLowerCase().includes(query));
+        return matchesCategory && matchesSearch;
+      });
+      renderAddons(filtered);
+    }
+
+    function renderAddons(addons) {
+      const container = document.getElementById('addons-container');
+      const countEl = document.getElementById('addonCount');
+      container.innerHTML = '';
+      countEl.innerText = `${addons.length} conteúdos em "${currentCategory}"`;
+
+      if (addons.length === 0) {
+        container.innerHTML = '<p style="text-align:center; color:#6b7280; padding:30px;">Nenhum conteúdo encontrado.</p>';
+        return;
+      }
+
+      addons.forEach(addon => {
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.onclick = () => openDetails(addon);
+        card.innerHTML = `
+          <img src="${addon.image_url || 'https://via.placeholder.com/100'}" alt="${addon.title}">
+          <div class="card-info">
+            <div class="card-title">${addon.title}</div>
+            <div class="card-author">por ${addon.author || 'Comunidade'}</div>
+            <div class="card-desc">${addon.description || 'Sem descrição.'}</div>
+            <span class="tag">${addon.category || 'Addon'}</span>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function openDetails(addon) {
+      currentAddon = addon;
+      document.getElementById('d-img').src = addon.image_url || 'https://via.placeholder.com/100';
+      document.getElementById('d-category').innerText = addon.category || 'ADDON';
+      document.getElementById('d-title').innerText = addon.title;
+      document.getElementById('d-author').innerText = addon.author || 'Comunidade';
+      document.getElementById('d-desc').innerText = addon.description || 'Sem descrição cadastrada.';
+      
+      const downloadBtn = document.getElementById('d-download');
+      downloadBtn.href = addon.download_url;
+
+      // Galeria Visual
+      const galleryBox = document.getElementById('d-gallery');
+      galleryBox.innerHTML = '';
+      let galleryList = addon.gallery_urls || [];
+      if (typeof galleryList === 'string') {
+        try { galleryList = JSON.parse(galleryList); } catch(e){ galleryList = []; }
+      }
+      if (galleryList.length > 0) {
+        galleryList.forEach(url => {
+          const img = document.createElement('img');
+          img.src = url;
+          galleryBox.appendChild(img);
+        });
+      } else {
+        galleryBox.innerHTML = '<p style="color:#6b7280; font-size:0.85rem;">Nenhuma foto adicional cadastrada.</p>';
+      }
+
+      // Vídeo
+      const videoBox = document.getElementById('d-video-box');
+      videoBox.innerHTML = '';
+      if (addon.video_url) {
+        const embedUrl = getYouTubeEmbedUrl(addon.video_url);
+        if (embedUrl) {
+          videoBox.innerHTML = `<div class="video-container"><iframe src="${embedUrl}" allowfullscreen></iframe></div>`;
+        } else {
+          videoBox.innerHTML = `<div class="video-container"><video src="${addon.video_url}" controls></video></div>`;
+        }
+      } else {
+        videoBox.innerHTML = '<p style="color:#6b7280; font-size:0.85rem;">Nenhum vídeo cadastrado para este mod.</p>';
+      }
+
+      // Botão Excluir
+      const myIds = getMyCreatedIds();
+      document.getElementById('d-delete-btn').style.display = myIds.includes(addon.id) ? 'block' : 'none';
+
+      document.getElementById('catalog-page').style.display = 'none';
+      document.getElementById('details-page').style.display = 'block';
+      window.scrollTo(0, 0);
+    }
+
+    function switchTab(tabName, btn) {
+      document.querySelectorAll('.tab-item').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById(`tab-${tabName}`).classList.add('active');
+    }
+
+    function getYouTubeEmbedUrl(url) {
+      const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+      const match = url.match(regExp);
+      return (match && match[2].length === 11) ? `https://www.youtube.com/embed/${match[2]}` : null;
+    }
+
+    function showCatalog() {
+      document.getElementById('details-page').style.display = 'none';
+      document.getElementById('catalog-page').style.display = 'block';
+    }
+
+    function toggleModal(show) {
+      document.getElementById('modalOverlay').style.display = show ? 'flex' : 'none';
+    }
+
+    function previewFileName(input, targetId) {
+      if (input.files && input.files[0]) {
+        document.getElementById(targetId).innerText = `Selecionado: ${input.files[0].name}`;
+      }
+    }
+
+    function checkGalleryFiles(input) {
+      if (input.files && input.files.length > 6) {
+        alert("⚠️ Você só pode selecionar no máximo 6 fotos para a galeria!");
+        input.value = "";
+        document.getElementById('galleryCount').innerText = "";
+        return;
+      }
+      if (input.files) {
+        document.getElementById('galleryCount').innerText = `${input.files.length} foto(s) selecionada(s).`;
+      }
+    }
+
+    // Upload direto para o Supabase Storage
+    async function uploadToStorage(file) {
+      const cleanName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const fileName = `${Date.now()}_${cleanName}`;
+      
+      const res = await fetch(`${SUPABASE_URL}/storage/v1/object/addons-media/${fileName}`, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': file.type || 'application/octet-stream'
+        },
+        body: file
+      });
+
+      if (res.ok) {
+        return `${SUPABASE_URL}/storage/v1/object/public/addons-media/${fileName}`;
+      } else {
+        const errorText = await res.text();
+        throw new Error(`Falha ao subir arquivo ${file.name}: ${errorText}`);
+      }
+    }
+
+    async function publicarAddon() {
+      const title = document.getElementById('pubTitle').value.trim();
+      const author = document.getElementById('pubAuthor').value.trim() || 'Comunidade';
+      const category = document.getElementById('pubCategory').value;
+      const description = document.getElementById('pubDesc').value.trim();
+
+      const imageFileInput = document.getElementById('pubImageFile');
+      let image_url = document.getElementById('pubImageUrl').value.trim();
+
+      const modFileInput = document.getElementById('pubModFile');
+      let download_url = document.getElementById('pubDownloadUrl').value.trim();
+
+      const videoFileInput = document.getElementById('pubVideoFile');
+      let video_url = document.getElementById('pubVideoUrl').value.trim();
+
+      const galleryFilesInput = document.getElementById('pubGalleryFiles');
+
+      const status = document.getElementById('statusMsg');
+      const submitBtn = document.getElementById('btnSubmitPub');
+
+      if (!title) {
+        alert("Por favor, digite o título do Addon!");
+        return;
+      }
+
+      submitBtn.disabled = true;
+      status.style.color = "#34d399";
+      status.innerText = "⏳ Enviando arquivos... Aguarde um instante!";
+
+      try {
+        // Upload Capa
+        if (imageFileInput.files && imageFileInput.files[0]) {
+          status.innerText = "⏳ Enviando Imagem de Capa...";
+          const uploadedUrl = await uploadToStorage(imageFileInput.files[0]);
+          if (uploadedUrl) image_url = uploadedUrl;
+        }
+
+        // Upload Arquivo do Mod (.mcaddon / .mcpack / .mcworld)
+        if (modFileInput.files && modFileInput.files[0]) {
+          status.innerText = "⏳ Enviando arquivo do Mod (pode demorar alguns segundos)...";
+          const uploadedModUrl = await uploadToStorage(modFileInput.files[0]);
+          if (uploadedModUrl) download_url = uploadedModUrl;
+        }
+
+        if (!download_url) {
+          alert("Atenção: Escolha um arquivo do mod ou digite a URL de download!");
+          submitBtn.disabled = false;
+          status.innerText = "";
+          return;
+        }
+
+        // Upload Vídeo da Galeria (se selecionado)
+        if (videoFileInput.files && videoFileInput.files[0]) {
+          status.innerText = "⏳ Enviando arquivo de vídeo...";
+          const uploadedVideoUrl = await uploadToStorage(videoFileInput.files[0]);
+          if (uploadedVideoUrl) video_url = uploadedVideoUrl;
+        }
+
+        // Upload Galeria (até 6 fotos)
+        let gallery_urls = [];
+        if (galleryFilesInput.files && galleryFilesInput.files.length > 0) {
+          status.innerText = "⏳ Enviando fotos da galeria...";
+          const totalFiles = Math.min(galleryFilesInput.files.length, 6);
+          for (let i = 0; i < totalFiles; i++) {
+            const gUrl = await uploadToStorage(galleryFilesInput.files[i]);
+            if (gUrl) gallery_urls.push(gUrl);
+          }
+        }
+
+        status.innerText = "⏳ Salvando dados no catálogo...";
+
+        const novo = {
+          title, author, category, description, video_url,
+          image_url: image_url || 'https://via.placeholder.com/400x200',
+          download_url,
+          gallery_urls,
+          version: 'Bedrock'
+        };
+
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/addons`, {
+          method: 'POST',
+          headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation'
+          },
+          body: JSON.stringify(novo)
+        });
+
+        if (res.ok) {
+          const created = await res.json();
+          if (created && created.length > 0) saveMyCreatedId(created[0].id);
+          alert("🎉 Conteúdo publicado com sucesso!");
+          toggleModal(false);
+          fetchAddons();
+        } else {
+          const errData = await res.text();
+          alert("Erro ao salvar no banco de dados: " + errData);
+        }
+      } catch (e) {
+        status.style.color = "#ef4444";
+        status.innerText = "❌ Erro no envio!";
+        alert("Erro no envio do arquivo: " + e.message);
+      } finally {
+        submitBtn.disabled = false;
+      }
+    }
+
+    // Função para Excluir o próprio Addon
+    async function excluirAddonAtual() {
+      if (!currentAddon || !confirm("Tem certeza de que deseja excluir este addon permanentemente?")) {
+        return;
+      }
+
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/addons?id=eq.${currentAddon.id}`, {
+        method: 'DELETE',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+        }
+      });
+
+      if (res.ok) {
+        alert("Addon excluído com sucesso!");
+        showCatalog();
+        fetchAddons();
+      } else {
+        alert("Erro ao excluir o addon.");
+      }
+    }
+
+    fetchAddons();
+  </script>
+</body>
+</html>
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="logo">SP Addons <span>BEDROCK</span></div>
+    <button class="btn-publish-open" onclick="toggleModal(true)">+ Publicar</button>
+  </header>
+
+  <!-- PÁGINA 1: CATÁLOGO -->
+  <div id="catalog-page">
+    <div class="categories">
+      <button class="cat-btn active" onclick="setCategory('Todos', this)">Todos</button>
+      <button class="cat-btn" onclick="setCategory('Add-ons Bedrock', this)">Add-ons Bedrock</button>
+      <button class="cat-btn" onclick="setCategory('Texturas', this)">Texturas</button>
+      <button class="cat-btn" onclick="setCategory('Mapas', this)">Mapas</button>
+    </div>
+
+    <div class="search-box">
+      <input type="text" id="searchInput" placeholder="Buscar conteúdos..." onkeyup="filterAddons()">
+    </div>
+
+    <div class="counter" id="addonCount">Carregando conteúdos...</div>
+
+    <div class="addons-list" id="addons-container"></div>
+  </div>
+
+  <!-- PÁGINA 2: DETALHES DO ADDON -->
+  <div id="details-page">
+    <button class="btn-back" onclick="showCatalog()">← VOLTAR PARA O CATÁLOGO</button>
+
+    <div class="details-card">
+      <div class="details-header">
+        <img id="d-img" class="details-img" src="" alt="Capa">
+        <div class="details-meta">
+          <div class="details-badges">
+            <span id="d-category" class="badge-cat">ADDONS</span>
+            <span class="badge-date">Atualizado recentemente</span>
+          </div>
+          <div id="d-title" class="details-title">Título do Addon</div>
+          <div class="details-author">Desenvolvido por <span id="d-author">Autor</span></div>
+          <div class="tags-row">
+            <span class="tag-pill">BEDROCK</span>
+            <span class="tag-pill">1.21.0+</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Botão de Download Direto -->
+      <a id="d-download" href="#" class="btn-download-big" download target="_blank">
+        <span>📥</span> Baixar Recurso
+      </a>
+
+      <!-- Botão de Excluir (Dono do Addon) -->
+      <button id="d-delete-btn" class="btn-delete-own" onclick="excluirAddonAtual()">🗑️ Excluir meu Addon</button>
+    </div>
+
+    <!-- Abas Internas da Tela de Detalhes -->
+    <div class="tab-bar">
+      <button class="tab-item active" onclick="switchTab('desc', this)">📄 Descrição</button>
+      <button class="tab-item" onclick="switchTab('gallery', this)">🖼️ Galeria Visual</button>
+      <button class="tab-item" onclick="switchTab('video', this)">🎥 Vídeo</button>
+    </div>
+
+    <div id="tab-desc" class="tab-content active">
+      <div id="d-desc" class="details-text">Descrição completa do addon...</div>
+    </div>
+
+    <div id="tab-gallery" class="tab-content">
+      <div id="d-gallery" class="gallery-grid"></div>
+    </div>
+
+    <div id="tab-video" class="tab-content">
+      <div id="d-video-box"></div>
+    </div>
+
+    <div class="verified-box">
+      <div class="verified-icon">🛡️</div>
+      <div>
+        <div class="verified-title">DOWNLOAD SEGURO E VERIFICADO</div>
+        <div class="verified-desc">No SP Addons todos os arquivos passam por checagem de integridade e varredura contra malwares.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DE PUBLICAÇÃO -->
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal">
+      <h2>Publicar Conteúdo</h2>
+      
+      <div class="form-group">
+        <label>Título e Autor</label>
+        <input type="text" id="pubTitle" placeholder="Ex: Ranzie Rise Addon" style="margin-bottom:6px;">
+        <input type="text" id="pubAuthor" placeholder="Seu Nome / Autor">
+      </div>
+
+      <div class="form-group">
+        <label>Categoria e Formato</label>
+        <select id="pubCategory">
+          <option value="Add-ons Bedrock">Add-ons Bedrock (.mcaddon)</option>
+          <option value="Texturas">Texturas (.mcpack)</option>
+          <option value="Mapas">Mapas (.mcworld)</option>
+        </select>
+      </div>
+
+      <!-- CAPA DA IMAGEM -->
+      <div class="form-group">
+        <label>Imagem da Capa</label>
+        <label class="file-input-btn">
+          🖼️ Escolher da Galeria do Celular
+          <input type="file" id="pubImageFile" accept="image/*" onchange="previewFileName(this, 'capaName')">
+        </label>
+        <div id="capaName" style="font-size:0.75rem; color:#10b981; margin-bottom:4px;"></div>
+        <input type="url" id="pubImageUrl" placeholder="OU cole a URL da Imagem">
+      </div>
+
       <!-- ARQUIVO DO MOD (.mcaddon, .mcpack, .mcworld) -->
       <div class="form-group">
         <label>Arquivo do Addon / Mod</label>
