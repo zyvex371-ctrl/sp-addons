@@ -17,6 +17,21 @@ headers_curseforge = {
     "Accept": "application/json"
 } if CURSEFORGE_KEY else {}
 
+def e_arquivo_valido(url_ou_nome):
+    """
+    Retorna False se for arquivo de Java (.jar) ou PC. 
+    Aceita apenas extensões ou links limpos de Bedrock.
+    """
+    if not url_ou_nome:
+        return False
+    texto = url_ou_nome.lower()
+    
+    # PROIBIDO TUDO QUE FOR JAVA OU PC
+    if '.jar' in texto or '.mrpack' in texto or '.exe' in texto or '.rar' in texto:
+        return False
+        
+    return True
+
 def obter_addons_existentes():
     url = f"{SUPABASE_URL}/rest/v1/addons?select=title"
     try:
@@ -44,7 +59,7 @@ def salvar_no_supabase(addon):
 
     res = requests.post(url, headers=headers_supabase, json=dados)
     if res.status_code in [200, 201]:
-        print(f"🔥 SALVO NO SITE: {addon['title']}")
+        print(f"🔥 SALVO NO SITE (Bedrock): {addon['title']}")
     else:
         dados.pop("downloads", None)
         dados.pop("screenshots", None)
@@ -59,7 +74,8 @@ def buscar_curseforge(termo, existentes, coletados):
     if not CURSEFORGE_KEY:
         return
 
-    url = f"https://api.curseforge.com/v1/mods/search?gameId=432&searchFilter={termo}&sortField=2&sortOrder=desc&pageSize=20"
+    # Força a busca contendo a palavra bedrock junto
+    url = f"https://api.curseforge.com/v1/mods/search?gameId=432&searchFilter={termo}%20bedrock&sortField=2&sortOrder=desc&pageSize=15"
     try:
         res = requests.get(url, headers=headers_curseforge)
         if res.status_code == 200:
@@ -73,8 +89,15 @@ def buscar_curseforge(termo, existentes, coletados):
                     
                 latest_files = mod.get("latestFiles", [])
                 download_url = None
+                file_name = ""
+                
                 if latest_files:
                     download_url = latest_files[0].get("downloadUrl")
+                    file_name = latest_files[0].get("fileName", "")
+                    
+                # Validação estrita anti-jar
+                if not e_arquivo_valido(file_name) or not e_arquivo_valido(download_url):
+                    continue
                     
                 if not download_url:
                     links_info = mod.get("links")
@@ -107,7 +130,7 @@ def buscar_curseforge(termo, existentes, coletados):
 
 # ==================== MODRINTH ====================
 def buscar_modrinth(termo, existentes, coletados):
-    url = f'https://api.modrinth.com/v2/search?query={termo}%20bedrock&limit=20&index=downloads'
+    url = f'https://api.modrinth.com/v2/search?query={termo}%20bedrock&limit=15&index=downloads'
     try:
         res = requests.get(url, headers={"User-Agent": "SPAddonsBot/1.0"})
         if res.status_code == 200:
@@ -123,6 +146,7 @@ def buscar_modrinth(termo, existentes, coletados):
                 v_url = f"https://api.modrinth.com/v2/project/{project_id}/version"
                 v_res = requests.get(v_url, headers={"User-Agent": "SPAddonsBot/1.0"})
                 download_url = None
+                file_name = ""
                 
                 if v_res.status_code == 200:
                     versions = v_res.json()
@@ -130,6 +154,11 @@ def buscar_modrinth(termo, existentes, coletados):
                         files = versions[0].get("files", [])
                         if files:
                             download_url = files[0].get("url")
+                            file_name = files[0].get("filename", "")
+                            
+                # Validação estrita anti-jar
+                if not e_arquivo_valido(file_name) or not e_arquivo_valido(download_url):
+                    continue
                             
                 if not download_url:
                     download_url = f"https://modrinth.com/mod/{project_id}"
@@ -156,26 +185,25 @@ def executar_bot():
     print(f"📌 Seu site já tem {len(existentes)} conteúdos.")
     
     coletados = []
-    termos = ["rpg", "furniture", "weapons", "action", "shader", "vehicles", "naruto", "zombie"]
+    termos = ["addon", "furniture", "weapons", "rpg", "shader", "vehicles"]
     
     for termo in termos:
-        print(f"🔍 Pesquisando por '{termo}'...")
+        print(f"🔍 Pesquisando por '{termo} bedrock'...")
         buscar_curseforge(termo, existentes, coletados)
         buscar_modrinth(termo, existentes, coletados)
 
     if not coletados:
-        print("😭 Nenhum mod encontrado.")
+        print("😭 Nenhum mod Bedrock puro encontrado.")
         return
 
-    # Pega os 10 melhores no total
-    para_salvar = sorted(coletados, key=lambda x: x['downloads'], reverse=True)[:10]
+    para_salvar = sorted(coletados, key=lambda x: x['downloads'], reverse=True)[:8]
     para_salvar.sort(key=lambda x: x['downloads'])
 
-    print(f"\n🚀 ENVIANDO {len(para_salvar)} Addons para o Supabase...")
+    print(f"\n🚀 ENVIANDO {len(para_salvar)} Addons Bedrock para o Supabase...")
     for item in para_salvar:
         salvar_no_supabase(item)
 
-    print("\n🎉 Processo concluído com sucesso!")
+    print("\n🎉 Processo concluído sem mods de Java!")
 
 if __name__ == "__main__":
     executar_bot()
