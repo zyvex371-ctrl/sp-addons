@@ -30,11 +30,7 @@ def obter_addons_existentes():
     return []
 
 def enviar_arquivo_para_storage(arquivo_bytes, nome_arquivo):
-    """
-    Envia o arquivo extraído direto para o seu bucket existente 'addons-media'
-    """
     storage_url = f"{SUPABASE_URL}/storage/v1/object/addons-media/{nome_arquivo}"
-    
     headers_storage = {
         "apikey": SUPABASE_KEY,
         "Authorization": f"Bearer {SUPABASE_KEY}",
@@ -44,16 +40,10 @@ def enviar_arquivo_para_storage(arquivo_bytes, nome_arquivo):
     
     res = requests.post(storage_url, headers=headers_storage, data=arquivo_bytes)
     if res.status_code in [200, 201]:
-        public_url = f"{SUPABASE_URL}/storage/v1/object/public/addons-media/{nome_arquivo}"
-        return public_url
-    else:
-        print(f"❌ Erro ao enviar para o Storage: {res.status_code} - {res.text}")
-        return None
+        return f"{SUPABASE_URL}/storage/v1/object/public/addons-media/{nome_arquivo}"
+    return None
 
 def processar_e_extrair_arquivo(download_url, titulo_mod):
-    """
-    Baixa o zip original, acha o .mcaddon/.mcpack dentro e joga no Supabase.
-    """
     try:
         print(f"📥 Baixando arquivo original: {titulo_mod}...")
         resp = requests.get(download_url, timeout=30)
@@ -62,23 +52,33 @@ def processar_e_extrair_arquivo(download_url, titulo_mod):
         
         z = zipfile.ZipFile(io.BytesIO(resp.content))
         
+        # 1. Procura se já tem .mcaddon ou .mcpack pronto lá dentro
         for filename in z.namelist():
             fn_lower = filename.lower()
             if fn_lower.endswith(('.mcaddon', '.mcpack', '.mctemplate')):
-                print(f"🎯 Arquivo Bedrock encontrado: {filename}")
+                print(f"🎯 Arquivo Bedrock direto encontrado: {filename}")
                 ext = fn_lower.split('.')[-1]
-                
-                conteudo_extraido = z.read(filename)
+                conteudo = z.read(filename)
                 
                 nome_limpo = "".join(c for c in titulo_mod if c.isalnum() or c in (' ', '_', '-')).strip().replace(' ', '_').lower()
-                nome_arquivo_final = f"bot_{nome_limpo}.{ext}"
-                
-                url_publica = enviar_arquivo_para_storage(conteudo_extraido, nome_arquivo_final)
-                return url_publica
-                
-        print(f"⚠️ Nenhum .mcaddon ou .mcpack dentro do zip de '{titulo_mod}'.")
+                return enviar_arquivo_para_storage(conteudo, f"bot_{nome_limpo}.{ext}")
+
+        # 2. Se não tiver, mas for um zip com pastas do mod, criamos um .mcaddon limpo para o usuário
+        print(f"📦 Criando arquivo .mcaddon compatível para '{titulo_mod}'...")
+        
+        in_memory = io.BytesIO()
+        with zipfile.ZipFile(in_memory, 'w', zipfile.ZIP_DEFLATED) as z_out:
+            for item in z.infolist():
+                # Copia os arquivos de conteúdo do mod para dentro do novo zip limpo
+                if not item.is_dir() and '__MACOSX' not in item.filename and not item.filename.endswith('.DS_Store'):
+                    z_out.writestr(item.filename, z.read(item.filename))
+                    
+        in_memory.seek(0)
+        nome_limpo = "".join(c for c in titulo_mod if c.isalnum() or c in (' ', '_', '-')).strip().replace(' ', '_').lower()
+        return enviar_arquivo_para_storage(in_memory.read(), f"bot_{nome_limpo}.mcaddon")
+
     except Exception as e:
-        print(f"⚠️ Erro ao processar arquivo zip de {titulo_mod}: {e}")
+        print(f"⚠️ Erro ao processar arquivo de {titulo_mod}: {e}")
         
     return None
 
@@ -113,7 +113,7 @@ def buscar_curseforge(termo, existentes, coletados):
     if not CURSEFORGE_KEY:
         return
 
-    url = f"https://api.curseforge.com/v1/mods/search?gameId=432&searchFilter={termo}%20bedrock&sortField=2&sortOrder=desc&pageSize=10"
+    url = f"https://api.curseforge.com/v1/mods/search?gameId=432&searchFilter={termo}%20bedrock&sortField=2&sortOrder=desc&pageSize=5"
     try:
         res = requests.get(url, headers=headers_curseforge)
         if res.status_code == 200:
@@ -133,7 +133,6 @@ def buscar_curseforge(termo, existentes, coletados):
                 if not download_url:
                     continue
                 
-                # Extrai e manda pro addons-media
                 link_direto_supabase = processar_e_extrair_arquivo(download_url, titulo)
                 if not link_direto_supabase:
                     continue
@@ -171,17 +170,17 @@ def executar_bot():
         buscar_curseforge(termo, existentes, coletados)
 
     if not coletados:
-        print("😭 Nenhum mod extraído com sucesso.")
+        print("😭 Nenhum mod processado.")
         return
 
     para_salvar = sorted(coletados, key=lambda x: x['downloads'], reverse=True)[:5]
     para_salvar.sort(key=lambda x: x['downloads'])
 
-    print(f"\n🚀 ENVIANDO {len(para_salvar)} Addons limpos para o Supabase...")
+    print(f"\n🚀 ENVIANDO {len(para_salvar)} Addons processados para o Supabase...")
     for item in para_salvar:
         salvar_no_supabase(item)
 
-    print("\n🎉 Processo concluído com arquivos extraídos no bucket addons-media!")
+    print("\n🎉 Processo concluído com sucesso total!")
 
 if __name__ == "__main__":
     executar_bot()
