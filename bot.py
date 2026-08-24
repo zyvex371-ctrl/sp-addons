@@ -42,19 +42,35 @@ def salvar_no_supabase(addon):
         print(f"❌ Erro ao salvar {addon['title']}: {res.status_code} - {res.text}")
 
 # ==================== MODRINTH ====================
-def obter_arquivo_modrinth(project_id):
+def obter_dados_extras_modrinth(project_id):
+    # Pega o link do arquivo de download e as fotos da galeria (gallery)
+    download_url = None
+    screenshots = []
+    
     try:
-        url = f"https://api.modrinth.com/v2/project/{project_id}/version"
-        res = requests.get(url, headers={"User-Agent": "SPAddonsBot/1.0"})
-        if res.status_code == 200:
-            versions = res.json()
+        # Busca versões para o download
+        v_url = f"https://api.modrinth.com/v2/project/{project_id}/version"
+        v_res = requests.get(v_url, headers={"User-Agent": "SPAddonsBot/1.0"})
+        if v_res.status_code == 200:
+            versions = v_res.json()
             for ver in versions:
                 files = ver.get("files", [])
                 if files:
-                    return files[0].get("url")
+                    download_url = files[0].get("url")
+                    break
+
+        # Busca galeria de fotos do projeto
+        p_url = f"https://api.modrinth.com/v2/project/{project_id}"
+        p_res = requests.get(p_url, headers={"User-Agent": "SPAddonsBot/1.0"})
+        if p_res.status_code == 200:
+            gallery = p_res.json().get("gallery", [])
+            for img in gallery:
+                if img.get("url"):
+                    screenshots.append(img.get("url"))
     except Exception as e:
-        print(f"Erro Modrinth versão {project_id}: {e}")
-    return None
+        print(f"Erro ao obter extras Modrinth {project_id}: {e}")
+        
+    return download_url, screenshots
 
 def buscar_modrinth(termo, existentes, coletados):
     print(f"🔍 [Modrinth] Pesquisando '{termo}'...")
@@ -68,22 +84,26 @@ def buscar_modrinth(termo, existentes, coletados):
                 if not titulo or titulo.lower() in existentes or any(c['title'].lower() == titulo.lower() for c in coletados):
                     continue
                     
-                download_url = obter_arquivo_modrinth(item.get("project_id"))
+                download_url, screenshots = obter_dados_extras_modrinth(item.get("project_id"))
                 if not download_url:
                     continue
                     
                 desc = item.get("description", "Conteúdo épico para Minecraft Bedrock.")
                 cat = classificar_categoria(titulo, desc, item.get("categories", []))
                 
+                # Usa a foto principal, ou a primeira screenshot como capa se não houver capa
+                capa = item.get("icon_url") or (screenshots[0] if screenshots else "https://via.placeholder.com/400x200")
+
                 coletados.append({
                     "title": titulo,
                     "category": cat,
                     "version": "Bedrock",
                     "author": item.get("author", "Comunidade"),
                     "description": desc,
-                    "image_url": item.get("icon_url") or "https://via.placeholder.com/400x200",
+                    "image_url": capa,
                     "download_url": download_url,
-                    "downloads": item.get("downloads", 0)
+                    "downloads": item.get("downloads", 0),
+                    "screenshots": screenshots
                 })
     except Exception as e:
         print(f"Erro na busca Modrinth: {e}")
@@ -114,8 +134,17 @@ def buscar_curseforge(termo, existentes, coletados):
                     
                 desc = mod.get("summary", "Conteúdo extraído do CurseForge.")
                 authors = ", ".join([a.get("name") for a in mod.get("authors", [])]) or "Comunidade"
+                
+                # Pega a foto do ícone/capa
                 logo = mod.get("logo", {})
-                image_url = logo.get("thumbnailUrl") or logo.get("url") or "https://via.placeholder.com/400x200"
+                capa = logo.get("thumbnailUrl") or logo.get("url") or "https://via.placeholder.com/400x200"
+                
+                # Pega todas as screenshots/fotos demonstrativas do CurseForge!
+                screenshots = []
+                for s in mod.get("screenshots", []):
+                    if s.get("url"):
+                        screenshots.append(s.get("url"))
+
                 cat = classificar_categoria(titulo, desc)
                 
                 coletados.append({
@@ -124,9 +153,10 @@ def buscar_curseforge(termo, existentes, coletados):
                     "version": "Bedrock",
                     "author": authors,
                     "description": desc,
-                    "image_url": image_url,
+                    "image_url": capa,
                     "download_url": download_url,
-                    "downloads": mod.get("downloadCount", 0)
+                    "downloads": mod.get("downloadCount", 0),
+                    "screenshots": screenshots
                 })
     except Exception as e:
         print(f"Erro ao buscar no CurseForge: {e}")
@@ -138,34 +168,28 @@ def executar_bot():
     coletados = []
     termos_massa = ["action", "rpg", "animation", "weapons", "furniture", "realistic", "shader", "pvp", "vehicles"]
     
-    # 1. Coleta conteúdos populares de cada termo
     for termo in termos_massa:
         buscar_modrinth(termo, existentes, coletados)
         buscar_curseforge(termo, existentes, coletados)
 
-    # 2. Separa em Addons e Texturas
     addons = [item for item in coletados if item['category'] == "Add-ons Bedrock"]
     texturas = [item for item in coletados if item['category'] == "Texturas"]
 
-    # 3. Ordena do MENOR para o MAIOR número de downloads
-    # Assim, o que tiver MAIS downloads é salvo por ÚLTIMO e fica no TOPO do site!
     addons_para_salvar = sorted(addons, key=lambda x: x['downloads'])[:5]
     texturas_para_salvar = sorted(texturas, key=lambda x: x['downloads'])[:5]
 
-    # Reordena novamente os 5 selecionados para garantir que o com maior número seja enviado por último
     addons_para_salvar.sort(key=lambda x: x['downloads'])
     texturas_para_salvar.sort(key=lambda x: x['downloads'])
 
     print(f"\n🚀 Salvando os {len(addons_para_salvar)} Addons e {len(texturas_para_salvar)} Texturas mais populares no Supabase...")
 
-    # 4. Envia para o Supabase
     for item in addons_para_salvar:
         salvar_no_supabase(item)
 
     for item in texturas_para_salvar:
         salvar_no_supabase(item)
 
-    print("\n🎉 Finalizado! Os mods mais famosos foram adicionados por último e ficaram no topo do seu site.")
+    print("\n🎉 Finalizado! Capas, fotos/screenshots e downloads foram salvos com sucesso.")
 
 if __name__ == "__main__":
     executar_bot()
