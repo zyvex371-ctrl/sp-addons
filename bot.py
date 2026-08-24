@@ -25,6 +25,21 @@ def e_arquivo_permitido(url):
     url_limpa = url.split('?')[0].lower()
     return not any(url_limpa.endswith(ext) for ext in EXTENSOES_PROIBIDAS)
 
+def tratar_url_download(url, categoria):
+    """
+    Se o link terminar em .zip, ajusta a query para forçar o download 
+    reconhecido como .mcaddon ou .mcpack no celular/navegador.
+    """
+    if not url:
+        return url
+    
+    url_base = url.split('?')[0]
+    if url_base.lower().endswith('.zip'):
+        ext = ".mcpack" if categoria == "Texturas" else ".mcaddon"
+        # Adiciona o parâmetro de nome de arquivo para o navegador tratar como mcaddon/mcpack
+        return f"{url}#file{ext}"
+    return url
+
 def obter_addons_existentes():
     url = f"{SUPABASE_URL}/rest/v1/addons?select=title"
     try:
@@ -40,17 +55,6 @@ def classificar_categoria(titulo, descricao, tags=""):
     if any(k in texto for k in ["texture", "resource", "textura", "shader", "pack", "16x", "32x", "64x"]):
         return "Texturas"
     return "Add-ons Bedrock"
-
-def formatar_link_download(url, categoria):
-    """
-    Garante que se o arquivo for .zip, o link receba tratamento 
-    ou sufixo para indicar se tratar de um .mcaddon ou .mcpack no Bedrock.
-    """
-    if not url:
-        return url
-    
-    # Se for uma textura e for zip, a gente ajusta a indicação
-    return url
 
 def salvar_no_supabase(addon):
     url = f"{SUPABASE_URL}/rest/v1/addons"
@@ -111,11 +115,13 @@ def buscar_curseforge(termo, existentes, coletados):
                     
                 desc = mod.get("summary", "Conteúdo incrível para Minecraft Bedrock.")
                 authors = ", ".join([a.get("name") for a in mod.get("authors", [])]) or "Comunidade"
+                cat = classificar_categoria(titulo, desc)
+                
+                download_url = tratar_url_download(download_url, cat)
                 
                 logo = mod.get("logo", {})
                 capa = logo.get("thumbnailUrl") or logo.get("url") or "https://via.placeholder.com/400x200"
                 screenshots = [s.get("url") for s in mod.get("screenshots", []) if s.get("url")]
-                cat = classificar_categoria(titulo, desc)
                 
                 coletados.append({
                     "title": titulo,
@@ -166,6 +172,7 @@ def buscar_modrinth(termo, existentes, coletados):
                     
                 desc = item.get("description", "Conteúdo incrível para Minecraft Bedrock.")
                 cat = classificar_categoria(titulo, desc, item.get("categories", []))
+                download_url = tratar_url_download(download_url, cat)
                 capa = item.get("icon_url") or "https://via.placeholder.com/400x200"
 
                 coletados.append({
