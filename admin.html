@@ -1,1 +1,102 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel de Moderação - SP Addons</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #121212; color: #fff; padding: 20px; }
+        .card { background: #1e1e1e; padding: 15px; margin-bottom: 15px; border-radius: 8px; display: flex; align-items: center; justify-content: space-between; }
+        .card img { width: 80px; height: 80px; object-fit: cover; border-radius: 4px; margin-right: 15px; }
+        .info { flex-grow: 1; }
+        button { padding: 10px 15px; border: none; cursor: pointer; border-radius: 5px; font-weight: bold; margin-left: 5px; }
+        .btn-aprovar { background: #28a745; color: #fff; }
+        .btn-excluir { background: #dc3545; color: #fff; }
+    </style>
+</head>
+<body>
+    <h1>🛡️ Painel de Moderação (Aprovar Addons)</h1>
+    <p>Estes itens foram enviados pelos usuários e estão aguardando sua liberação.</p>
+    
+    <div id="lista-pendentes">Carregando pendentes...</div>
 
+    <script>
+        // COLOQUE SUAS CHAVES DO SUPABASE AQUI
+        const SUPABASE_URL = "SUA_URL_DO_SUPABASE";
+        const SUPABASE_KEY = "SUA_CHAVE_ANON_DO_SUPABASE";
+
+        async function carregarPendentes() {
+            const res = await fetch(`${SUPABASE_URL}/rest/v1/addons?status=eq.pendente&select=*`, {
+                headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+            });
+            const itens = await res.json();
+            
+            const container = document.getElementById("lista-pendentes");
+            container.innerHTML = "";
+
+            if (itens.length === 0) {
+                container.innerHTML = "<p>Nenhum mod pendente no momento. Tudo limpo! 🎉</p>";
+                return;
+            }
+
+            itens.forEach(item => {
+                container.innerHTML += `
+                    <div class="card">
+                        <img src="${item.image_url}" alt="Capa">
+                        <div class="info">
+                            <h3>${item.title} (${item.category})</h3>
+                            <p>${item.description}</p>
+                            <a href="${item.download_url}" target="_blank">Testar Arquivo</a>
+                        </div>
+                        <div>
+                            <button class="btn-aprovar" onclick="mudarStatus('${item.id}', 'aprovado')">Aprovar ✅</button>
+                            <button class="btn-excluir" onclick="deletarItem('${item.id}')">Excluir ❌</button>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        async function mudarStatus(id, novoStatus) {
+            const res = await fetch(`${SUPABASE_URL}/rest/v1/addons?id=eq.${id}`, {
+                method: "PATCH",
+                headers: {
+                    "apikey": SUPABASE_KEY,
+                    "Authorization": `Bearer ${SUPABASE_KEY}`,
+                    "Content-Type": "application/json",
+                    "Prefer": "return=minimal"
+                },
+                body: JSON.stringify({ status: novoStatus })
+            });
+
+            if (res.ok) {
+                alert("Modo aprovado com sucesso!");
+                carregarPendentes();
+            } else {
+                alert("Erro ao aprovar.");
+            }
+        }
+
+        async function deletarItem(id) {
+            if (!confirm("Tem certeza que deseja apagar este mod?")) return;
+            
+            const res = await fetch(`${SUPABASE_URL}/rest/v1/addons?id=eq.${id}`, {
+                method: "DELETE",
+                headers: {
+                    "apikey": SUPABASE_KEY,
+                    "Authorization": `Bearer ${SUPABASE_KEY}`
+                }
+            });
+
+            if (res.ok) {
+                alert("Mod removido!");
+                carregarPendentes();
+            } else {
+                alert("Erro ao excluir.");
+            }
+        }
+
+        carregarPendentes();
+    </script>
+</body>
+</html>
