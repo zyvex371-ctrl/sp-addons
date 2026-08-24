@@ -136,8 +136,8 @@
 <body>
 
   <header>
-    <!-- Secreto: clique 5 vezes na palavra "BEDROCK" para abrir a caixa de senha -->
-    <div class="logo">SP Addons <span onclick="pedirSenhaAdmin()">BEDROCK</span></div>
+    <!-- Exige exatamente 5 cliques na palavra BEDROCK para disparar a senha -->
+    <div class="logo">SP Addons <span onclick="clicarBedrock()">BEDROCK</span></div>
     <div class="header-actions">
       <button class="btn-publish-open" onclick="toggleModal(true)">+ Publicar</button>
       <button class="btn-menu" onclick="toggleDrawer(true)" aria-label="Abrir Menu">☰</button>
@@ -177,7 +177,7 @@
             <span class="faq-arrow">▼</span>
           </div>
           <div class="faq-body">
-            1. Clique em <b>+ Publicار</b>.<br>
+            1. Clique em <b>+ Publicar</b>.<br>
             2. Selecione a foto, o arquivo do mod e o vídeo.<br>
             3. Acompanhe a porcentagem de envio na tela.<br>
             4. Aguarde a mensagem de sucesso!
@@ -318,34 +318,46 @@
     const SUPABASE_URL = 'https://dsezdcusbhitmzjipvgy.supabase.co';
     const SUPABASE_ANON_KEY = 'sb_publishable_Kodxv-JTmas50sItp-s3Gg_R8GMX5l_';
     
-    // 🔐 SENHA FORTE DO PAINEL ADMIN (Você pode alterar aqui se quiser)
+    // 🔐 SENHA FORTE DO PAINEL ADMIN
     const SENHA_ADMIN_SECRETA = 'SPAddons2026!';
 
     let allAddons = [];
     let currentCategory = 'Todos';
     let currentAddon = null;
+    let cliquesBedrock = 0;
 
-    // ✨ SEGURANÇA: Verifica se este aparelho já colocou a senha correta antes
+    // ✨ SEGURANÇA: O botão começa oculto. Só aparece se já foi validado neste aparelho antes.
     window.addEventListener('DOMContentLoaded', () => {
       if (localStorage.getItem('sp_admin_liberado') === 'true') {
         document.getElementById('btnAdminMenu').style.display = 'flex';
       }
     });
 
-    function pedirSenhaAdmin() {
-      // Se já estiver liberado, avisa
+    function clicarBedrock() {
       if (localStorage.getItem('sp_admin_liberado') === 'true') {
         alert("🔒 O Painel Admin já está liberado neste aparelho!");
         return;
       }
 
-      const senhaDigitada = prompt("Digite a senha de Administrador:");
-      if (senhaDigitada === SENHA_ADMIN_SECRETA) {
-        localStorage.setItem('sp_admin_liberado', 'true');
-        document.getElementById('btnAdminMenu').style.display = 'flex';
-        alert("🎉 Senha correta! Painel Admin liberado com sucesso neste aparelho.");
-      } else if (senhaDigitada !== null) {
-        alert("❌ Senha incorreta!");
+      cliquesBedrock++;
+      
+      // Reseta a contagem se demorar muito para dar os 5 cliques (3 segundos)
+      clearTimeout(window.tempoCliques);
+      window.tempoCliques = setTimeout(() => {
+        cliquesBedrock = 0;
+      }, 3000);
+
+      // Só abre a senha após exatamente 5 cliques
+      if (cliquesBedrock === 5) {
+        cliquesBedrock = 0;
+        const senhaDigitada = prompt("Digite a senha de Administrador:");
+        if (senhaDigitada === SENHA_ADMIN_SECRETA) {
+          localStorage.setItem('sp_admin_liberado', 'true');
+          document.getElementById('btnAdminMenu').style.display = 'flex';
+          alert("🎉 Senha correta! Painel Admin liberado com sucesso neste aparelho.");
+        } else if (senhaDigitada !== null) {
+          alert("❌ Senha incorreta!");
+        }
       }
     }
 
