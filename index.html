@@ -341,7 +341,8 @@
 
     async function fetchAddons() {
       try {
-        const response = await fetch(`${SUPABASE_URL}/rest/v1/addons?select=*`, {
+        // ✨ Pega apenas os itens que já foram aprovados por você
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/addons?status=eq.aprovado&select=*`, {
           headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
         });
         allAddons = await response.json();
@@ -594,7 +595,8 @@
         const novo = {
           title, author, category, description, video_url,
           image_url: image_url || 'https://via.placeholder.com/400x200',
-          download_url, gallery_urls, version: 'Bedrock'
+          download_url, gallery_urls, version: 'Bedrock',
+          status: 'pendente' // Salva como pendente para aguardar sua moderação
         };
 
         const res = await fetch(`${SUPABASE_URL}/rest/v1/addons`, {
@@ -611,7 +613,7 @@
         if (res.ok) {
           const created = await res.json();
           if (created && created.length > 0) saveMyCreatedId(created[0].id);
-          alert("🎉 Publicado com sucesso!");
+          alert("🎉 Enviado para análise! O mod aparecerá no site assim que for aprovado por você.");
           toggleModal(false);
           fetchAddons();
         } else {
