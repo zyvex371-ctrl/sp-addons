@@ -17,15 +17,14 @@ headers_curseforge = {
     "Accept": "application/json"
 } if CURSEFORGE_KEY else {}
 
-EXTENSOES_INVALIDAS = ('.jar', '.exe', '.deb', '.rpm')
+# Aceita ESTRITAMENTE extensões do Minecraft Bedrock (NADA de .zip, NADA de .jar)
+EXTENSOES_BEDROCK_DIRETAS = ('.mcaddon', '.mcpack', '.mctemplate')
 
-def e_arquivo_valido(url):
+def e_link_mcaddon_direto(url):
     if not url:
         return False
     url_limpa = url.split('?')[0].lower()
-    if any(url_limpa.endswith(ext) for ext in EXTENSOES_INVALIDAS):
-        return False
-    return True
+    return url_limpa.endswith(EXTENSOES_BEDROCK_DIRETAS)
 
 def obter_addons_existentes():
     url = f"{SUPABASE_URL}/rest/v1/addons?select=title"
@@ -39,14 +38,12 @@ def obter_addons_existentes():
 
 def classificar_categoria(titulo, descricao, tags=""):
     texto = (str(titulo) + " " + str(descricao) + " " + str(tags)).lower()
-    if any(k in texto for k in ["texture", "resource", "textura", "shader", "pack", "16x", "32x", "64x"]):
+    if any(k in texto for k in ["texture", "resource", "textura", "shader", "pack", "16x", "32x", "64x", "visuals"]):
         return "Texturas"
     return "Add-ons Bedrock"
 
 def salvar_no_supabase(addon):
     url = f"{SUPABASE_URL}/rest/v1/addons"
-    
-    # Prepara objeto seguro (se screenshots ou downloads faltarem, ele não quebra)
     dados = {
         "title": addon["title"],
         "category": addon["category"],
@@ -54,104 +51,45 @@ def salvar_no_supabase(addon):
         "author": addon["author"],
         "description": addon["description"],
         "image_url": addon["image_url"],
-        "download_url": addon["download_url"]
+        "download_url": addon["download_url"],
+        "downloads": addon.get("downloads", 0)
     }
-    
-    if "downloads" in addon:
-        dados["downloads"] = addon["downloads"]
     if "screenshots" in addon:
         dados["screenshots"] = addon["screenshots"]
 
     res = requests.post(url, headers=headers_supabase, json=dados)
     if res.status_code in [200, 201]:
-        print(f"🔥 Cadastrado no site: {addon['title']} [{addon['category']}]")
+        print(f"🔥 Cadastrado no site: {addon['title']} [{addon['category']}] | Downloads: {addon['downloads']}")
     else:
-        # Se der erro de coluna faltando, tenta sem downloads/screenshots
-        dados.pop("downloads", None)
         dados.pop("screenshots", None)
+        dados.pop("downloads", None)
         res_retry = requests.post(url, headers=headers_supabase, json=dados)
         if res_retry.status_code in [200, 201]:
             print(f"✅ Cadastrado no site (Modo Simples): {addon['title']}")
         else:
             print(f"❌ Erro ao salvar {addon['title']}: {res.status_code} - {res.text}")
 
-# ==================== MODRINTH ====================
-def obter_dados_extras_modrinth(project_id):
-    download_url = None
-    screenshots = []
-    try:
-        v_url = f"https://api.modrinth.com/v2/project/{project_id}/version"
-        v_res = requests.get(v_url, headers={"User-Agent": "SPAddonsBot/1.0"})
-        if v_res.status_code == 200:
-            versions = v_res.json()
-            for ver in versions:
-                files = ver.get("files", [])
-                for f in files:
-                    file_url = f.get("url")
-                    if e_arquivo_valido(file_url):
-                        download_url = file_url
-                        break
-                if download_url:
-                    break
-
-        p_url = f"https://api.modrinth.com/v2/project/{project_id}"
-        p_res = requests.get(p_url, headers={"User-Agent": "SPAddonsBot/1.0"})
-        if p_res.status_code == 200:
-            gallery = p_res.json().get("gallery", [])
-            screenshots = [img.get("url") for img in gallery if img.get("url")]
-    except Exception as e:
-        print(f"Erro Modrinth {project_id}: {e}")
-        
-    return download_url, screenshots
-
-def buscar_modrinth(termo, existentes, coletados):
-    print(f"🔍 [Modrinth] Pesquisando '{termo}'...")
-    url = f'https://api.modrinth.com/v2/search?query={termo}%20bedrock&limit=30&index=downloads'
-    try:
-        res = requests.get(url, headers={"User-Agent": "SPAddonsBot/1.0"})
-        if res.status_code == 200:
-            items = res.json().get("hits", [])
-            for item in items:
-                titulo = item.get("title", "").strip()
-                if not titulo or titulo.lower() in existentes or any(c['title'].lower() == titulo.lower() for c in coletados):
-                    continue
-                    
-                download_url, screenshots = obter_dados_extras_modrinth(item.get("project_id"))
-                if not download_url:
-                    continue
-                    
-                desc = item.get("description", "Conteúdo incrível para Minecraft Bedrock.")
-                cat = classificar_categoria(titulo, desc, item.get("categories", []))
-                capa = item.get("icon_url") or (screenshots[0] if screenshots else "https://via.placeholder.com/400x200")
-
-                coletados.append({
-                    "title": titulo,
-                    "category": cat,
-                    "version": "Bedrock",
-                    "author": item.get("author", "Comunidade"),
-                    "description": desc,
-                    "image_url": capa,
-                    "download_url": download_url,
-                    "downloads": item.get("downloads", 0),
-                    "screenshots": screenshots
-                })
-    except Exception as e:
-        print(f"Erro na busca Modrinth: {e}")
-
-# ==================== CURSEFORGE ====================
+# ==================== CURSEFORGE (Foco Principal Bedrock) ====================
 def buscar_curseforge(termo, existentes, coletados):
     if not CURSEFORGE_KEY:
-        print("⚠️ CurseForge Key não detectada nas variáveis de ambiente.")
+        print("⚠️ CurseForge Key não detectada nas variáveis.")
         return
 
-    url = f"https://api.curseforge.com/v1/mods/search?gameId=432&searchFilter={termo}&sortField=2&sortOrder=desc&pageSize=30"
+    # classId=4562 força a categoria exclusiva de Addons do Bedrock
+    url = f"https://api.curseforge.com/v1/mods/search?gameId=432&classId=4562&searchFilter={termo}&sortField=2&sortOrder=desc&pageSize=50"
     try:
-        print(f"🔍 [CurseForge] Pesquisando '{termo}'...")
+        print(f"🔍 [CurseForge Bedrock] Pesquisando '{termo}'...")
         res = requests.get(url, headers=headers_curseforge)
         if res.status_code == 200:
             mods = res.json().get("data", [])
             for mod in mods:
                 titulo = mod.get("name", "").strip()
+                downloads = mod.get("downloadCount", 0)
+                
+                # Só aceita se tiver mais de 5.000 downloads para garantir que seja bom
+                if downloads < 5000:
+                    continue
+
                 if not titulo or titulo.lower() in existentes or any(c['title'].lower() == titulo.lower() for c in coletados):
                     continue
                     
@@ -160,14 +98,15 @@ def buscar_curseforge(termo, existentes, coletados):
                 if latest_files:
                     for f in latest_files:
                         f_url = f.get("downloadUrl")
-                        if e_arquivo_valido(f_url):
+                        # Verifica se o link é direto de .mcaddon / .mcpack
+                        if e_link_mcaddon_direto(f_url):
                             download_url = f_url
                             break
                     
                 if not download_url:
                     continue
                     
-                desc = mod.get("summary", "Conteúdo extraído do CurseForge.")
+                desc = mod.get("summary", "Conteúdo incrível para Minecraft Bedrock.")
                 authors = ", ".join([a.get("name") for a in mod.get("authors", [])]) or "Comunidade"
                 
                 logo = mod.get("logo", {})
@@ -183,35 +122,95 @@ def buscar_curseforge(termo, existentes, coletados):
                     "description": desc,
                     "image_url": capa,
                     "download_url": download_url,
-                    "downloads": mod.get("downloadCount", 0),
+                    "downloads": downloads,
                     "screenshots": screenshots
                 })
     except Exception as e:
         print(f"Erro CurseForge: {e}")
+
+# ==================== MODRINTH ====================
+def buscar_modrinth(termo, existentes, coletados):
+    print(f"🔍 [Modrinth Bedrock] Pesquisando '{termo}'...")
+    url = f'https://api.modrinth.com/v2/search?query={termo}&limit=30&index=downloads'
+    try:
+        res = requests.get(url, headers={"User-Agent": "SPAddonsBot/1.0"})
+        if res.status_code == 200:
+            items = res.json().get("hits", [])
+            for item in items:
+                titulo = item.get("title", "").strip()
+                downloads = item.get("downloads", 0)
+                
+                if downloads < 3000:
+                    continue
+
+                if not titulo or titulo.lower() in existentes or any(c['title'].lower() == titulo.lower() for c in coletados):
+                    continue
+                    
+                project_id = item.get("project_id")
+                
+                # Busca versões para testar se tem arquivo .mcaddon / .mcpack
+                v_url = f"https://api.modrinth.com/v2/project/{project_id}/version"
+                v_res = requests.get(v_url, headers={"User-Agent": "SPAddonsBot/1.0"})
+                download_url = None
+                if v_res.status_code == 200:
+                    for ver in v_res.json():
+                        for f in ver.get("files", []):
+                            file_url = f.get("url")
+                            if e_link_mcaddon_direto(file_url):
+                                download_url = file_url
+                                break
+                        if download_url:
+                            break
+                            
+                if not download_url:
+                    continue
+                    
+                desc = item.get("description", "Conteúdo incrível para Minecraft Bedrock.")
+                cat = classificar_categoria(titulo, desc, item.get("categories", []))
+                capa = item.get("icon_url") or "https://via.placeholder.com/400x200"
+
+                coletados.append({
+                    "title": titulo,
+                    "category": cat,
+                    "version": "Bedrock",
+                    "author": item.get("author", "Comunidade"),
+                    "description": desc,
+                    "image_url": capa,
+                    "download_url": download_url,
+                    "downloads": downloads,
+                    "screenshots": []
+                })
+    except Exception as e:
+        print(f"Erro Modrinth: {e}")
 
 def executar_bot():
     existentes = obter_addons_existentes()
     print(f"📌 Itens já cadastrados no banco: {len(existentes)}")
     
     coletados = []
-    termos = ["bedrock", "addon", "mcpe", "texture", "rpg", "furniture", "shader"]
+    
+    # Termos focados nos addons mais famosos e desejados do Bedrock
+    termos = [
+        "action and stuff", "weapons", "furniture", "animation", 
+        "rpg", "vehicles", "shader", "pvp", "guns", "armor"
+    ]
     
     for termo in termos:
-        buscar_modrinth(termo, existentes, coletados)
         buscar_curseforge(termo, existentes, coletados)
+        buscar_modrinth(termo, existentes, coletados)
 
     addons = [item for item in coletados if item['category'] == "Add-ons Bedrock"]
     texturas = [item for item in coletados if item['category'] == "Texturas"]
 
-    # Seleciona os de maior download
-    addons_para_salvar = sorted(addons, key=lambda x: x['downloads'])[:5]
-    texturas_para_salvar = sorted(texturas, key=lambda x: x['downloads'])[:5]
+    # Seleciona os 5 mais baixados de cada categoria
+    addons_para_salvar = sorted(addons, key=lambda x: x['downloads'], reverse=True)[:5]
+    texturas_para_salvar = sorted(texturas, key=lambda x: x['downloads'], reverse=True)[:5]
 
-    # Ordena para salvar os maiores por último (ficando no topo do site)
+    # Re-ordena do menor para o maior para que o MAIS POPULAR seja salvo por ÚLTIMO (ficando no TOPO do site)
     addons_para_salvar.sort(key=lambda x: x['downloads'])
     texturas_para_salvar.sort(key=lambda x: x['downloads'])
 
-    print(f"\n🚀 Salvando {len(addons_para_salvar)} Addons e {len(texturas_para_salvar)} Texturas no Supabase...")
+    print(f"\n🚀 Salvando {len(addons_para_salvar)} Addons Épicos e {len(texturas_para_salvar)} Texturas (.mcaddon e .mcpack diretos)...")
 
     for item in addons_para_salvar:
         salvar_no_supabase(item)
@@ -219,7 +218,7 @@ def executar_bot():
     for item in texturas_para_salvar:
         salvar_no_supabase(item)
 
-    print("\n🎉 Finalizado!")
+    print("\n🎉 Finalizado! Apenas arquivos diretos .mcaddon e .mcpack dos mods mais populares foram adicionados.")
 
 if __name__ == "__main__":
     executar_bot()
