@@ -25,7 +25,7 @@
 
     /* Cabeçalho */
     header { display: flex; align-items: center; justify-content: space-between; padding: 10px 0 20px; border-bottom: 1px solid #1e293b; margin-bottom: 15px; }
-    .logo { font-size: 1.3rem; font-weight: 900; color: #ffffff; display: flex; align-items: center; gap: 8px; cursor: pointer; }
+    .logo { font-size: 1.3rem; font-weight: 900; color: #ffffff; display: flex; align-items: center; gap: 8px; }
     .logo span { background: #10b981; color: #000; font-size: 0.7rem; padding: 3px 8px; border-radius: 6px; font-weight: 800; }
 
     .header-actions { display: flex; align-items: center; gap: 10px; }
@@ -233,7 +233,7 @@
   </div>
 
   <!-- PAINEL ADMIN -->
-  <div id="admin-page">
+  <div id="admin-page" style="display: none;">
     <button class="btn-back" onclick="showCatalog()">← VOLTAR PARA O CATÁLOGO</button>
     <h2 style="margin-bottom: 15px; color: #34d399;">🛡️ Painel de Moderação (Aprovar Addons)</h2>
     <p style="color: #9ca3af; margin-bottom: 20px; font-size: 0.9rem;">Estes itens foram enviados e aguardam sua liberação.</p>
@@ -320,24 +320,9 @@
     let currentCategory = 'Todos';
     let currentAddon = null;
 
-    // Ativar botão de admin automaticamente se já foi liberado neste aparelho
-    window.addEventListener('DOMContentLoaded', () => {
-      if (localStorage.getItem('sp_admin_ativo') === 'true') {
-        document.getElementById('btnAdminMenu').style.display = 'flex';
-      }
-    });
-
-    // TRUQUE SECRETO: Clique 5 vezes na logo "SP Addons" para ativar o Admin neste aparelho
-    let cliquesLogo = 0;
-    document.querySelector('.logo').addEventListener('click', () => {
-      cliquesLogo++;
-      if (cliquesLogo === 5) {
-        localStorage.setItem('sp_admin_ativo', 'true');
-        document.getElementById('btnAdminMenu').style.display = 'flex';
-        alert("🔓 Modo Admin ativado com sucesso neste aparelho!");
-        cliquesLogo = 0;
-      }
-    });
+    // ✨ ATIVAÇÃO AUTOMÁTICA DO ADMIN PARA VOCÊ (Sem precisar clicar em nada!)
+    localStorage.setItem('sp_admin_ativo', 'true');
+    document.getElementById('btnAdminMenu').style.display = 'flex';
 
     function toggleDrawer(show) {
       document.getElementById('drawerOverlay').classList.toggle('active', show);
