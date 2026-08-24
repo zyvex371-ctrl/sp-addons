@@ -24,4 +24,5 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          CURSEFORGE_KEY: ${{ secrets.CURSEFORGE_KEY }}
         run: python bot.py
