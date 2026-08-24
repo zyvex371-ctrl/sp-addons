@@ -25,7 +25,7 @@
 
     /* Cabeçalho */
     header { display: flex; align-items: center; justify-content: space-between; padding: 10px 0 20px; border-bottom: 1px solid #1e293b; margin-bottom: 15px; }
-    .logo { font-size: 1.3rem; font-weight: 900; color: #ffffff; display: flex; align-items: center; gap: 8px; }
+    .logo { font-size: 1.3rem; font-weight: 900; color: #ffffff; display: flex; align-items: center; gap: 8px; cursor: pointer; }
     .logo span { background: #10b981; color: #000; font-size: 0.7rem; padding: 3px 8px; border-radius: 6px; font-weight: 800; }
 
     .header-actions { display: flex; align-items: center; gap: 10px; }
@@ -70,6 +70,7 @@
     /* Páginas */
     #catalog-page { display: block; }
     #details-page { display: none; }
+    #admin-page { display: none; }
 
     /* Categorias */
     .categories { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 12px; margin-bottom: 15px; scrollbar-width: none; }
@@ -155,6 +156,12 @@
         <span>💡 Dicas e Dúvidas</span>
         <span>➔</span>
       </button>
+
+      <!-- Botão Admin secreto (só aparece para você) -->
+      <button id="btnAdminMenu" class="menu-item-btn" style="display: none; background: #064e3b; border-color: #10b981;" onclick="abrirPainelAdmin()">
+        <span>🛡️ Admin 🛡️</span>
+        <span>➔</span>
+      </button>
     </div>
 
     <div id="viewMenuDicas" class="view-dicas">
@@ -223,6 +230,14 @@
     <div id="tab-desc" class="tab-content active"><div id="d-desc" class="details-text"></div></div>
     <div id="tab-gallery" class="tab-content"><div id="d-gallery" class="gallery-grid"></div></div>
     <div id="tab-video" class="tab-content"><div id="d-video-box"></div></div>
+  </div>
+
+  <!-- PAINEL ADMIN -->
+  <div id="admin-page">
+    <button class="btn-back" onclick="showCatalog()">← VOLTAR PARA O CATÁLOGO</button>
+    <h2 style="margin-bottom: 15px; color: #34d399;">🛡️ Painel de Moderação (Aprovar Addons)</h2>
+    <p style="color: #9ca3af; margin-bottom: 20px; font-size: 0.9rem;">Estes itens foram enviados e aguardam sua liberação.</p>
+    <div id="lista-pendentes">Carregando pendentes...</div>
   </div>
 
   <!-- MODAL PUBLICAR -->
@@ -305,6 +320,25 @@
     let currentCategory = 'Todos';
     let currentAddon = null;
 
+    // Ativar botão de admin automaticamente se já foi liberado neste aparelho
+    window.addEventListener('DOMContentLoaded', () => {
+      if (localStorage.getItem('sp_admin_ativo') === 'true') {
+        document.getElementById('btnAdminMenu').style.display = 'flex';
+      }
+    });
+
+    // TRUQUE SECRETO: Clique 5 vezes na logo "SP Addons" para ativar o Admin neste aparelho
+    let cliquesLogo = 0;
+    document.querySelector('.logo').addEventListener('click', () => {
+      cliquesLogo++;
+      if (cliquesLogo === 5) {
+        localStorage.setItem('sp_admin_ativo', 'true');
+        document.getElementById('btnAdminMenu').style.display = 'flex';
+        alert("🔓 Modo Admin ativado com sucesso neste aparelho!");
+        cliquesLogo = 0;
+      }
+    });
+
     function toggleDrawer(show) {
       document.getElementById('drawerOverlay').classList.toggle('active', show);
       document.getElementById('drawerMenu').classList.toggle('active', show);
@@ -341,7 +375,6 @@
 
     async function fetchAddons() {
       try {
-        // ✨ Pega apenas os itens que já foram aprovados por você
         const response = await fetch(`${SUPABASE_URL}/rest/v1/addons?status=eq.aprovado&select=*`, {
           headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
         });
@@ -441,6 +474,8 @@
       document.getElementById('d-delete-btn').style.display = myIds.includes(addon.id) ? 'block' : 'none';
 
       document.getElementById('catalog-page').style.display = 'none';
+      document.getElementById('details-page').style.display = 'none';
+      document.getElementById('admin-page').style.display = 'none';
       document.getElementById('details-page').style.display = 'block';
       window.scrollTo(0, 0);
     }
@@ -460,6 +495,7 @@
 
     function showCatalog() {
       document.getElementById('details-page').style.display = 'none';
+      document.getElementById('admin-page').style.display = 'none';
       document.getElementById('catalog-page').style.display = 'block';
     }
 
@@ -596,7 +632,7 @@
           title, author, category, description, video_url,
           image_url: image_url || 'https://via.placeholder.com/400x200',
           download_url, gallery_urls, version: 'Bedrock',
-          status: 'pendente' // Salva como pendente para aguardar sua moderação
+          status: 'pendente'
         };
 
         const res = await fetch(`${SUPABASE_URL}/rest/v1/addons`, {
@@ -640,6 +676,86 @@
         alert("Addon excluído!");
         showCatalog();
         fetchAddons();
+      }
+    }
+
+    // FUNÇÕES DO PAINEL ADMIN
+    function abrirPainelAdmin() {
+      toggleDrawer(false);
+      document.getElementById('catalog-page').style.display = 'none';
+      document.getElementById('details-page').style.display = 'none';
+      document.getElementById('admin-page').style.display = 'block';
+      carregarPendentes();
+    }
+
+    async function carregarPendentes() {
+      const container = document.getElementById("lista-pendentes");
+      container.innerHTML = "Carregando...";
+
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/addons?status=eq.pendente&select=*`, {
+        headers: { "apikey": SUPABASE_ANON_KEY, "Authorization": `Bearer ${SUPABASE_ANON_KEY}` }
+      });
+      const itens = await res.json();
+      
+      container.innerHTML = "";
+
+      if (itens.length === 0) {
+        container.innerHTML = "<p style='color:#6b7280;'>Nenhum mod pendente no momento. Tudo limpo! 🎉</p>";
+        return;
+      }
+
+      itens.forEach(item => {
+        container.innerHTML += `
+          <div style="background: #131b2e; border: 1px solid #1f293d; padding: 15px; margin-bottom: 15px; border-radius: 12px; display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+            <img src="${item.image_url}" style="width: 70px; height: 70px; object-fit: cover; border-radius: 8px; flex-shrink: 0;">
+            <div style="flex-grow: 1; min-width: 0;">
+              <h3 style="font-size: 0.95rem; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${item.title}</h3>
+              <p style="font-size: 0.75rem; color: #9ca3af; margin: 4px 0;">${item.category} • por ${item.author}</p>
+              <a href="${item.download_url}" target="_blank" style="font-size: 0.8rem; color: #34d399; text-decoration: underline;">Testar Arquivo</a>
+            </div>
+            <div style="display: flex; gap: 6px; flex-shrink: 0;">
+              <button onclick="mudarStatus('${item.id}', 'aprovado')" style="background: #10b981; color: #000; border: none; padding: 8px 12px; border-radius: 6px; font-weight: bold; cursor: pointer;">✅</button>
+              <button onclick="deletarItem('${item.id}')" style="background: #ef4444; color: #fff; border: none; padding: 8px 12px; border-radius: 6px; font-weight: bold; cursor: pointer;">❌</button>
+            </div>
+          </div>
+        `;
+      });
+    }
+
+    async function mudarStatus(id, novoStatus) {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/addons?id=eq.${id}`, {
+        method: "PATCH",
+        headers: {
+          "apikey": SUPABASE_ANON_KEY,
+          "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+          "Content-Type": "application/json",
+          "Prefer": "return=minimal"
+        },
+        body: JSON.stringify({ status: novoStatus })
+      });
+
+      if (res.ok) {
+        alert("Modo aprovado com sucesso!");
+        carregarPendentes();
+        fetchAddons();
+      } else {
+        alert("Erro ao aprovar.");
+      }
+    }
+
+    async function deletarItem(id) {
+      if (!confirm("Tem certeza que deseja apagar este mod?")) return;
+      
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/addons?id=eq.${id}`, {
+        method: 'DELETE',
+        headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+      });
+
+      if (res.ok) {
+        alert("Mod removido!");
+        carregarPendentes();
+      } else {
+        alert("Erro ao excluir.");
       }
     }
 
