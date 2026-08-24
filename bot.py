@@ -58,7 +58,7 @@ def buscar_curseforge(termo, existentes, coletados):
     if not CURSEFORGE_KEY:
         return
 
-    url = f"https://api.curseforge.com/v1/mods/search?gameId=432&searchFilter={termo}%20bedrock&sortField=2&sortOrder=desc&pageSize=5"
+    url = f"https://api.curseforge.com/v1/mods/search?gameId=432&searchFilter={termo}%20bedrock&sortField=2&sortOrder=desc&pageSize=15"
     try:
         res = requests.get(url, headers=headers_curseforge)
         if res.status_code == 200:
@@ -70,11 +70,21 @@ def buscar_curseforge(termo, existentes, coletados):
                 if not titulo or titulo.lower() in existentes or any(c['title'].lower() == titulo.lower() for c in coletados):
                     continue
                     
-                # Pega o link oficial da página do mod no CurseForge (Garantia de 100% de funcionamento)
-                links = mod.get("links", {})
-                web_url = links.get("websiteUrl") if isinstance(links, dict) else None
+                latest_files = mod.get("latestFiles", [])
+                download_url = None
                 
-                if not web_url:
+                # Procura nos arquivos recentes um que seja nativamente .mcaddon ou .mcpack para download direto
+                if latest_files:
+                    for f in latest_files:
+                        f_name = f.get("fileName", "").lower()
+                        f_url = f.get("downloadUrl")
+                        
+                        if f_url and (f_name.endswith('.mcaddon') or f_name.endswith('.mcpack')):
+                            download_url = f_url
+                            break
+                    
+                # Se não achar um arquivo direto pronto, pula o mod para evitar arquivos de PC quebrados
+                if not download_url:
                     continue
                     
                 desc = mod.get("summary", "Conteúdo incrível para Minecraft Bedrock.")
@@ -91,7 +101,7 @@ def buscar_curseforge(termo, existentes, coletados):
                     "author": authors,
                     "description": desc,
                     "image_url": capa,
-                    "download_url": web_url, # Link seguro oficial do mod
+                    "download_url": download_url, # Link direto de download do arquivo .mcaddon/.mcpack
                     "downloads": downloads,
                     "screenshots": screenshots
                 })
@@ -103,20 +113,20 @@ def executar_bot():
     print(f"📌 Seu site já tem {len(existentes)} conteúdos.")
     
     coletados = []
-    termos = ["furniture", "weapons", "rpg", "vehicles"]
+    termos = ["furniture", "weapons", "rpg", "vehicles", "addon", "shader"]
     
     for termo in termos:
-        print(f"🔍 Pesquisando por '{termo} bedrock'...")
+        print(f"🔍 Pesquisando por arquivos diretos de '{termo} bedrock'...")
         buscar_curseforge(termo, existentes, coletados)
 
     if not coletados:
-        print("😭 Nenhum mod encontrado.")
+        print("😭 Nenhum mod com arquivo direto encontrado.")
         return
 
     para_salvar = sorted(coletados, key=lambda x: x['downloads'], reverse=True)[:8]
     para_salvar.sort(key=lambda x: x['downloads'])
 
-    print(f"\n🚀 ENVIANDO {len(para_salvar)} Addons seguros para o Supabase...")
+    print(f"\n🚀 ENVIANDO {len(para_salvar)} Addons com download direto para o Supabase...")
     for item in para_salvar:
         salvar_no_supabase(item)
 
