@@ -59,7 +59,6 @@ def buscar_curseforge(existentes, coletados):
         print("⚠️ AVISO: CurseForge Key não encontrada.")
         return
 
-    # Busca na categoria oficial de Addons Bedrock (classId=4562)
     url = f"https://api.curseforge.com/v1/mods/search?gameId=432&classId=4562&sortField=2&sortOrder=desc&pageSize=50"
     
     try:
@@ -80,12 +79,12 @@ def buscar_curseforge(existentes, coletados):
                 download_url = None
                 
                 if latest_files:
-                    # Pega o primeiro link de download disponível na categoria Bedrock
                     download_url = latest_files[0].get("downloadUrl")
                     
                 if not download_url:
-                    # Se não tiver o link direto, usa o link do mod no site do CurseForge
-                    download_url = mod.get("links", {})."websiteUrl" if isinstance(mod.get("links"), dict) else None
+                    links_info = mod.get("links")
+                    if isinstance(links_info, dict):
+                        download_url = links_info.get("websiteUrl")
                     
                 if not download_url:
                     continue
@@ -123,9 +122,8 @@ def executar_bot():
         print("😭 Nenhum mod novo para salvar.")
         return
 
-    # Pega os 10 melhores
     para_salvar = sorted(coletados, key=lambda x: x['downloads'], reverse=True)[:10]
-    para_salvar.sort(key=lambda x: x['downloads']) # Ordem para o mais popular ficar no topo
+    para_salvar.sort(key=lambda x: x['downloads'])
 
     print(f"\n🚀 ENVIANDO {len(para_salvar)} Addons para o Supabase...")
     for item in para_salvar:
