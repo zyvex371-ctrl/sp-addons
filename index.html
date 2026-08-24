@@ -157,8 +157,8 @@
         <span>➔</span>
       </button>
 
-      <!-- Botão Admin secreto (só aparece para você) -->
-      <button id="btnAdminMenu" class="menu-item-btn" style="display: none; background: #064e3b; border-color: #10b981;" onclick="abrirPainelAdmin()">
+      <!-- Botão Admin visível diretamente -->
+      <button id="btnAdminMenu" class="menu-item-btn" style="background: #064e3b; border-color: #10b981;" onclick="abrirPainelAdmin()">
         <span>🛡️ Admin 🛡️</span>
         <span>➔</span>
       </button>
@@ -319,10 +319,6 @@
     let allAddons = [];
     let currentCategory = 'Todos';
     let currentAddon = null;
-
-    // ✨ ATIVAÇÃO AUTOMÁTICA DO ADMIN PARA VOCÊ (Sem precisar clicar em nada!)
-    localStorage.setItem('sp_admin_ativo', 'true');
-    document.getElementById('btnAdminMenu').style.display = 'flex';
 
     function toggleDrawer(show) {
       document.getElementById('drawerOverlay').classList.toggle('active', show);
