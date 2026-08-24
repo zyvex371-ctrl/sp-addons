@@ -17,6 +17,15 @@ headers_curseforge = {
     "Accept": "application/json"
 }
 
+# Extensões permitidas para Minecraft Bedrock (Impede arquivos .jar do Java Edition)
+EXTENSOES_BEDROCK_VALIDAS = ('.mcaddon', '.mcpack', '.mctemplate', '.zip')
+
+def e_arquivo_bedrock_valido(url):
+    if not url:
+        return False
+    url_limpa = url.split('?')[0].lower()
+    return url_limpa.endswith(EXTENSOES_BEDROCK_VALIDAS)
+
 def obter_addons_existentes():
     url = f"{SUPABASE_URL}/rest/v1/addons?select=title"
     try:
@@ -43,23 +52,26 @@ def salvar_no_supabase(addon):
 
 # ==================== MODRINTH ====================
 def obter_dados_extras_modrinth(project_id):
-    # Pega o link do arquivo de download e as fotos da galeria (gallery)
     download_url = None
     screenshots = []
     
     try:
-        # Busca versões para o download
+        # Busca versões para pegar o arquivo de download do Bedrock
         v_url = f"https://api.modrinth.com/v2/project/{project_id}/version"
         v_res = requests.get(v_url, headers={"User-Agent": "SPAddonsBot/1.0"})
         if v_res.status_code == 200:
             versions = v_res.json()
             for ver in versions:
                 files = ver.get("files", [])
-                if files:
-                    download_url = files[0].get("url")
+                for f in files:
+                    file_url = f.get("url")
+                    if e_arquivo_bedrock_valido(file_url):
+                        download_url = file_url
+                        break
+                if download_url:
                     break
 
-        # Busca galeria de fotos do projeto
+        # Busca a galeria de imagens
         p_url = f"https://api.modrinth.com/v2/project/{project_id}"
         p_res = requests.get(p_url, headers={"User-Agent": "SPAddonsBot/1.0"})
         if p_res.status_code == 200:
@@ -73,8 +85,9 @@ def obter_dados_extras_modrinth(project_id):
     return download_url, screenshots
 
 def buscar_modrinth(termo, existentes, coletados):
-    print(f"🔍 [Modrinth] Pesquisando '{termo}'...")
-    url = f'https://api.modrinth.com/v2/search?query={termo}&limit=50&index=downloads'
+    print(f"🔍 [Modrinth Bedrock] Pesquisando '{termo}'...")
+    # Filtro 'facets' obriga o resultado a ter a categoria Bedrock
+    url = f'https://api.modrinth.com/v2/search?query={termo}&limit=50&index=downloads&facets=[["categories:bedrock"]]'
     try:
         res = requests.get(url, headers={"User-Agent": "SPAddonsBot/1.0"})
         if res.status_code == 200:
@@ -88,10 +101,8 @@ def buscar_modrinth(termo, existentes, coletados):
                 if not download_url:
                     continue
                     
-                desc = item.get("description", "Conteúdo épico para Minecraft Bedrock.")
+                desc = item.get("description", "Conteúdo incrível para Minecraft Bedrock.")
                 cat = classificar_categoria(titulo, desc, item.get("categories", []))
-                
-                # Usa a foto principal, ou a primeira screenshot como capa se não houver capa
                 capa = item.get("icon_url") or (screenshots[0] if screenshots else "https://via.placeholder.com/400x200")
 
                 coletados.append({
@@ -113,9 +124,10 @@ def buscar_curseforge(termo, existentes, coletados):
     if not CURSEFORGE_KEY:
         return
 
-    url = f"https://api.curseforge.com/v1/mods/search?gameId=432&searchFilter={termo}&sortField=2&sortOrder=desc&pageSize=50"
+    # classId 4562 = Exclusivo para Addons e conteúdos do Minecraft Bedrock/MCPE
+    url = f"https://api.curseforge.com/v1/mods/search?gameId=432&classId=4562&searchFilter={termo}&sortField=2&sortOrder=desc&pageSize=50"
     try:
-        print(f"🔍 [CurseForge] Pesquisando '{termo}'...")
+        print(f"🔍 [CurseForge Bedrock] Pesquisando '{termo}'...")
         res = requests.get(url, headers=headers_curseforge)
         if res.status_code == 200:
             mods = res.json().get("data", [])
@@ -127,7 +139,11 @@ def buscar_curseforge(termo, existentes, coletados):
                 latest_files = mod.get("latestFiles", [])
                 download_url = None
                 if latest_files:
-                    download_url = latest_files[0].get("downloadUrl")
+                    for f in latest_files:
+                        f_url = f.get("downloadUrl")
+                        if e_arquivo_bedrock_valido(f_url):
+                            download_url = f_url
+                            break
                     
                 if not download_url:
                     continue
@@ -135,16 +151,10 @@ def buscar_curseforge(termo, existentes, coletados):
                 desc = mod.get("summary", "Conteúdo extraído do CurseForge.")
                 authors = ", ".join([a.get("name") for a in mod.get("authors", [])]) or "Comunidade"
                 
-                # Pega a foto do ícone/capa
                 logo = mod.get("logo", {})
                 capa = logo.get("thumbnailUrl") or logo.get("url") or "https://via.placeholder.com/400x200"
                 
-                # Pega todas as screenshots/fotos demonstrativas do CurseForge!
-                screenshots = []
-                for s in mod.get("screenshots", []):
-                    if s.get("url"):
-                        screenshots.append(s.get("url"))
-
+                screenshots = [s.get("url") for s in mod.get("screenshots", []) if s.get("url")]
                 cat = classificar_categoria(titulo, desc)
                 
                 coletados.append({
@@ -181,7 +191,7 @@ def executar_bot():
     addons_para_salvar.sort(key=lambda x: x['downloads'])
     texturas_para_salvar.sort(key=lambda x: x['downloads'])
 
-    print(f"\n🚀 Salvando os {len(addons_para_salvar)} Addons e {len(texturas_para_salvar)} Texturas mais populares no Supabase...")
+    print(f"\n🚀 Salvando {len(addons_para_salvar)} Addons Bedrock e {len(texturas_para_salvar)} Texturas Bedrock (Formatos válidos)...")
 
     for item in addons_para_salvar:
         salvar_no_supabase(item)
@@ -189,7 +199,7 @@ def executar_bot():
     for item in texturas_para_salvar:
         salvar_no_supabase(item)
 
-    print("\n🎉 Finalizado! Capas, fotos/screenshots e downloads foram salvos com sucesso.")
+    print("\n🎉 Processo finalizado com sucesso! Apenas conteúdos 100% Bedrock instaláveis foram adicionados.")
 
 if __name__ == "__main__":
     executar_bot()
