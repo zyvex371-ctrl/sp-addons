@@ -1,6 +1,5 @@
 import os
 import requests
-import json
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
@@ -31,7 +30,6 @@ def obter_arquivo_download(project_id):
             for ver in versions:
                 files = ver.get("files", [])
                 if files:
-                    # Pega o primeiro arquivo disponível do projeto
                     return files[0].get("url")
     except Exception as e:
         print(f"Erro ao obter versão do projeto {project_id}: {e}")
@@ -44,8 +42,7 @@ def classificar_categoria(titulo, descricao, tags):
     return "Add-ons Bedrock"
 
 def buscar_items_api(offset=0, query="bedrock"):
-    # Utiliza busca direta com termo e offset para varrer conteúdos
-    url = f'https://api.modrinth.com/v2/search?query={query}&limit=100&offset={offset}'
+    url = f'https://api.modrinth.com/v2/search?query={query}&limit=50&offset={offset}'
     try:
         res = requests.get(url, headers={"User-Agent": "SPAddonsBot/1.0"})
         if res.status_code == 200:
@@ -66,13 +63,13 @@ def executar_bot():
     existentes = obter_addons_existentes()
     print(f"📌 Itens atualmente cadastrados no banco: {len(existentes)}")
     
-    limite_addons = 15
-    limite_texturas = 15
+    # Meta otimizada: tenta pegar até 5 de cada a cada 27 minutos
+    limite_addons = 5
+    limite_texturas = 5
     
     addons_add = 0
     texturas_add = 0
     
-    # Palavras de busca para encontrar todo tipo de Addon/Textura Bedrock/MCPE
     termos_busca = ["bedrock", "mcpe", "addon", "texture pack", "resource pack"]
     
     for termo in termos_busca:
@@ -81,7 +78,7 @@ def executar_bot():
             
         print(f"🔍 Pesquisando termo: '{termo}'...")
         
-        for page in range(0, 500, 100):
+        for page in range(0, 400, 50):
             if addons_add >= limite_addons and texturas_add >= limite_texturas:
                 break
                 
