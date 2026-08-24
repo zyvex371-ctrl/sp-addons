@@ -73,17 +73,16 @@ def buscar_curseforge(termo, existentes, coletados):
                 latest_files = mod.get("latestFiles", [])
                 download_url = None
                 
-                # Procura nos arquivos recentes um que seja nativamente .mcaddon ou .mcpack para download direto
                 if latest_files:
-                    for f in latest_files:
-                        f_name = f.get("fileName", "").lower()
-                        f_url = f.get("downloadUrl")
-                        
-                        if f_url and (f_name.endswith('.mcaddon') or f_name.endswith('.mcpack')):
-                            download_url = f_url
-                            break
+                    # Pega o link do arquivo mais recente disponível
+                    download_url = latest_files[0].get("downloadUrl")
                     
-                # Se não achar um arquivo direto pronto, pula o mod para evitar arquivos de PC quebrados
+                if not download_url:
+                    # Se não tiver o arquivo direto, pega o link oficial da página do mod
+                    links_info = mod.get("links")
+                    if isinstance(links_info, dict):
+                        download_url = links_info.get("websiteUrl")
+                    
                 if not download_url:
                     continue
                     
@@ -101,7 +100,7 @@ def buscar_curseforge(termo, existentes, coletados):
                     "author": authors,
                     "description": desc,
                     "image_url": capa,
-                    "download_url": download_url, # Link direto de download do arquivo .mcaddon/.mcpack
+                    "download_url": download_url,
                     "downloads": downloads,
                     "screenshots": screenshots
                 })
@@ -116,17 +115,17 @@ def executar_bot():
     termos = ["furniture", "weapons", "rpg", "vehicles", "addon", "shader"]
     
     for termo in termos:
-        print(f"🔍 Pesquisando por arquivos diretos de '{termo} bedrock'...")
+        print(f"🔍 Pesquisando por '{termo} bedrock'...")
         buscar_curseforge(termo, existentes, coletados)
 
     if not coletados:
-        print("😭 Nenhum mod com arquivo direto encontrado.")
+        print("😭 Nenhum mod encontrado.")
         return
 
-    para_salvar = sorted(coletados, key=lambda x: x['downloads'], reverse=True)[:8]
+    para_salvar = sorted(coletados, key=lambda x: x['downloads'], reverse=True)[:10]
     para_salvar.sort(key=lambda x: x['downloads'])
 
-    print(f"\n🚀 ENVIANDO {len(para_salvar)} Addons com download direto para o Supabase...")
+    print(f"\n🚀 ENVIANDO {len(para_salvar)} Addons para o Supabase...")
     for item in para_salvar:
         salvar_no_supabase(item)
 
