@@ -18,19 +18,28 @@ headers_curseforge = {
 } if CURSEFORGE_KEY else {}
 
 def e_arquivo_valido(url_ou_nome):
-    """
-    Retorna False se for arquivo de Java (.jar) ou PC. 
-    Aceita apenas extensões ou links limpos de Bedrock.
-    """
     if not url_ou_nome:
         return False
     texto = url_ou_nome.lower()
-    
-    # PROIBIDO TUDO QUE FOR JAVA OU PC
+    # Barre arquivos de Java de vez
     if '.jar' in texto or '.mrpack' in texto or '.exe' in texto or '.rar' in texto:
         return False
-        
     return True
+
+def ajustar_link_para_bedrock(url, categoria):
+    """
+    Garante que o link termine com a extensão correta do Bedrock 
+    para que o celular abra direto no Minecraft ao baixar.
+    """
+    if not url:
+        return url
+    
+    # Se for link do CurseForge ou Modrinth que termina em zip, 
+    # adicionamos um truque de parâmetros para o navegador forçar o download correto
+    if categoria == "Texturas":
+        return f"{url}#file.mcpack"
+    else:
+        return f"{url}#file.mcaddon"
 
 def obter_addons_existentes():
     url = f"{SUPABASE_URL}/rest/v1/addons?select=title"
@@ -59,7 +68,7 @@ def salvar_no_supabase(addon):
 
     res = requests.post(url, headers=headers_supabase, json=dados)
     if res.status_code in [200, 201]:
-        print(f"🔥 SALVO NO SITE (Bedrock): {addon['title']}")
+        print(f"🔥 SALVO NO SITE: {addon['title']}")
     else:
         dados.pop("downloads", None)
         dados.pop("screenshots", None)
@@ -74,7 +83,6 @@ def buscar_curseforge(termo, existentes, coletados):
     if not CURSEFORGE_KEY:
         return
 
-    # Força a busca contendo a palavra bedrock junto
     url = f"https://api.curseforge.com/v1/mods/search?gameId=432&searchFilter={termo}%20bedrock&sortField=2&sortOrder=desc&pageSize=15"
     try:
         res = requests.get(url, headers=headers_curseforge)
@@ -95,7 +103,6 @@ def buscar_curseforge(termo, existentes, coletados):
                     download_url = latest_files[0].get("downloadUrl")
                     file_name = latest_files[0].get("fileName", "")
                     
-                # Validação estrita anti-jar
                 if not e_arquivo_valido(file_name) or not e_arquivo_valido(download_url):
                     continue
                     
@@ -110,6 +117,9 @@ def buscar_curseforge(termo, existentes, coletados):
                 desc = mod.get("summary", "Conteúdo incrível para Minecraft Bedrock.")
                 authors = ", ".join([a.get("name") for a in mod.get("authors", [])]) or "Comunidade"
                 cat = "Texturas" if any(k in desc.lower() for k in ["texture", "shader", "16x", "pack"]) else "Add-ons Bedrock"
+                
+                # Ajusta o link de download para forçar a extensão correta
+                download_url = ajustar_link_para_bedrock(download_url, cat)
                 
                 logo = mod.get("logo", {})
                 capa = logo.get("thumbnailUrl") or logo.get("url") or "https://via.placeholder.com/400x200"
@@ -156,7 +166,6 @@ def buscar_modrinth(termo, existentes, coletados):
                             download_url = files[0].get("url")
                             file_name = files[0].get("filename", "")
                             
-                # Validação estrita anti-jar
                 if not e_arquivo_valido(file_name) or not e_arquivo_valido(download_url):
                     continue
                             
@@ -165,6 +174,10 @@ def buscar_modrinth(termo, existentes, coletados):
                     
                 desc = item.get("description", "Conteúdo incrível para Minecraft Bedrock.")
                 cat = "Texturas" if "resourcepack" in item.get("categories", []) else "Add-ons Bedrock"
+                
+                # Ajusta o link de download para forçar a extensão correta
+                download_url = ajustar_link_para_bedrock(download_url, cat)
+                
                 capa = item.get("icon_url") or "https://via.placeholder.com/400x200"
 
                 coletados.append({
@@ -199,11 +212,11 @@ def executar_bot():
     para_salvar = sorted(coletados, key=lambda x: x['downloads'], reverse=True)[:8]
     para_salvar.sort(key=lambda x: x['downloads'])
 
-    print(f"\n🚀 ENVIANDO {len(para_salvar)} Addons Bedrock para o Supabase...")
+    print(f"\n🚀 ENVIANDO {len(para_salvar)} Addons corrigidos para o Supabase...")
     for item in para_salvar:
         salvar_no_supabase(item)
 
-    print("\n🎉 Processo concluído sem mods de Java!")
+    print("\n🎉 Processo concluído com links otimizados!")
 
 if __name__ == "__main__":
     executar_bot()
