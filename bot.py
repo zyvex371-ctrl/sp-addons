@@ -17,27 +17,25 @@ headers_curseforge = {
     "Accept": "application/json"
 } if CURSEFORGE_KEY else {}
 
-# Aceitamos nativos e Zips (muitos criadores fazem .mcpack.zip)
+# Extensões válidas e inválidas
 EXTENSOES_PERMITIDAS = ('.mcaddon', '.mcpack', '.mctemplate', '.zip')
-
-# Bloqueio TOTAL de arquivos do Java Edition
 EXTENSOES_PROIBIDAS = ('.jar', '.mrpack', '.rar', '.exe', '.deb')
 
-def e_arquivo_bedrock_valido(url):
+def e_arquivo_bedrock_valido(nome_arquivo):
     """
-    Verifica se o arquivo é válido para Bedrock, permitindo .zip 
-    mas barrando completamente mods de Java (.jar, .mrpack).
+    Verifica o NOME do arquivo (e não o link) para ver se tem a extensão correta.
     """
-    if not url:
+    if not nome_arquivo:
         return False
-    url_limpa = url.split('?')[0].lower()
     
-    # Se for mod de Java, rejeita imediatamente!
-    if any(url_limpa.endswith(ext) for ext in EXTENSOES_PROIBIDAS):
+    nome_limpo = nome_arquivo.lower()
+    
+    # Se for de Java, bloqueia na hora
+    if any(nome_limpo.endswith(ext) for ext in EXTENSOES_PROIBIDAS):
         return False
         
-    # Se terminar com extensão válida de Bedrock ou Zip, aceita!
-    if any(url_limpa.endswith(ext) for ext in EXTENSOES_PERMITIDAS):
+    # Se terminar com extensão de Bedrock ou zip, aceita!
+    if any(nome_limpo.endswith(ext) for ext in EXTENSOES_PERMITIDAS):
         return True
         
     return False
@@ -75,7 +73,7 @@ def salvar_no_supabase(addon):
 
     res = requests.post(url, headers=headers_supabase, json=dados)
     if res.status_code in [200, 201]:
-        print(f"🔥 Cadastrado no site: {addon['title']} [{addon['category']}]")
+        print(f"🔥 Cadastrado no site: {addon['title']}")
     else:
         dados.pop("screenshots", None)
         dados.pop("downloads", None)
@@ -90,7 +88,6 @@ def buscar_curseforge(termo, existentes, coletados):
     if not CURSEFORGE_KEY:
         return
 
-    # classId=4562 filtra nativamente para Bedrock
     url = f"https://api.curseforge.com/v1/mods/search?gameId=432&classId=4562&searchFilter={termo}&sortField=2&sortOrder=desc&pageSize=50"
     try:
         print(f"🔍 [CurseForge] Buscando: '{termo}'...")
@@ -101,8 +98,8 @@ def buscar_curseforge(termo, existentes, coletados):
                 titulo = mod.get("name", "").strip()
                 downloads = mod.get("downloadCount", 0)
 
-                # Pega só mods bons com mais de 1000 downloads
-                if downloads < 1000:
+                # Aceitamos mods com pelo menos 300 downloads
+                if downloads < 300:
                     continue
 
                 if not titulo or titulo.lower() in existentes or any(c['title'].lower() == titulo.lower() for c in coletados):
@@ -110,11 +107,14 @@ def buscar_curseforge(termo, existentes, coletados):
                     
                 latest_files = mod.get("latestFiles", [])
                 download_url = None
+                
                 if latest_files:
                     for f in latest_files:
                         f_url = f.get("downloadUrl")
-                        # Passa pelo nosso novo filtro inteligente
-                        if e_arquivo_bedrock_valido(f_url):
+                        f_name = f.get("fileName", "") # AQUI: Pega o NOME do arquivo
+                        
+                        # Verifica o NOME do arquivo
+                        if e_arquivo_bedrock_valido(f_name):
                             download_url = f_url
                             break
                     
@@ -146,7 +146,6 @@ def buscar_curseforge(termo, existentes, coletados):
 # ==================== MODRINTH ====================
 def buscar_modrinth(termo, existentes, coletados):
     print(f"🔍 [Modrinth] Buscando: '{termo}'...")
-    # facet categories:bedrock garante que a pesquisa é só de Bedrock
     url = f'https://api.modrinth.com/v2/search?query={termo}&limit=50&index=downloads&facets=[["categories:bedrock"]]'
     try:
         res = requests.get(url, headers={"User-Agent": "SPAddonsBot/1.0"})
@@ -156,7 +155,7 @@ def buscar_modrinth(termo, existentes, coletados):
                 titulo = item.get("title", "").strip()
                 downloads = item.get("downloads", 0)
 
-                if downloads < 1000:
+                if downloads < 300:
                     continue
 
                 if not titulo or titulo.lower() in existentes or any(c['title'].lower() == titulo.lower() for c in coletados):
@@ -171,8 +170,10 @@ def buscar_modrinth(termo, existentes, coletados):
                     for ver in v_res.json():
                         for f in ver.get("files", []):
                             file_url = f.get("url")
-                            # Passa pelo nosso novo filtro inteligente
-                            if e_arquivo_bedrock_valido(file_url):
+                            file_name = f.get("filename", "") # AQUI: Pega o NOME do arquivo
+                            
+                            # Verifica o NOME do arquivo
+                            if e_arquivo_bedrock_valido(file_name):
                                 download_url = file_url
                                 break
                         if download_url:
@@ -201,10 +202,12 @@ def buscar_modrinth(termo, existentes, coletados):
 
 def executar_bot():
     existentes = obter_addons_existentes()
-    print(f"📌 Itens já cadastrados no banco: {len(existentes)}")
+    print(f"📌 Itens já cadastrados: {len(existentes)}")
     
     coletados = []
-    termos = ["rpg", "furniture", "weapons", "action", "pvp", "shader", "vehicles"]
+    
+    # Coloquei termos bem famosos para garantir que ele ache muita coisa!
+    termos = ["rpg", "furniture", "weapons", "action", "pvp", "shader", "vehicles", "naruto", "magic", "zombie"]
     
     for termo in termos:
         buscar_curseforge(termo, existentes, coletados)
@@ -213,14 +216,14 @@ def executar_bot():
     addons = [item for item in coletados if item['category'] == "Add-ons Bedrock"]
     texturas = [item for item in coletados if item['category'] == "Texturas"]
 
-    # Pega os 5 melhores de cada!
-    addons_para_salvar = sorted(addons, key=lambda x: x['downloads'], reverse=True)[:5]
-    texturas_para_salvar = sorted(texturas, key=lambda x: x['downloads'], reverse=True)[:5]
+    # Pegando os 10 melhores
+    addons_para_salvar = sorted(addons, key=lambda x: x['downloads'], reverse=True)[:10]
+    texturas_para_salvar = sorted(texturas, key=lambda x: x['downloads'], reverse=True)[:10]
 
     addons_para_salvar.sort(key=lambda x: x['downloads'])
     texturas_para_salvar.sort(key=lambda x: x['downloads'])
 
-    print(f"\n🚀 Salvando os {len(addons_para_salvar)} Addons e {len(texturas_para_salvar)} Texturas REAIS de Bedrock no Supabase...")
+    print(f"\n🚀 Salvando até {len(addons_para_salvar)} Addons e {len(texturas_para_salvar)} Texturas no Supabase...")
 
     for item in addons_para_salvar:
         salvar_no_supabase(item)
