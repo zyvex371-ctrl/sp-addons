@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SP Addons | Minecraft Bedrock</title>
+  <!-- BIBLIOTECA TUS PARA UPLOAD EM PEDAÇOS (IGUAL AO ZXKO) -->
+  <script src="https://cdn.jsdelivr.net/npm/tus-js-client@2/dist/tus.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; -webkit-tap-highlight-color: transparent; }
     body { background-color: #0b0f17; color: #f3f4f6; min-height: 100vh; padding: 16px; }
@@ -31,25 +33,11 @@
     .drawer-title { font-size: 1.1rem; font-weight: 800; color: #fff; }
     .btn-close-drawer { background: transparent; border: none; color: #9ca3af; font-size: 1.4rem; cursor: pointer; font-weight: bold; }
 
-    /* BOTÕES DO MENU LATERAL */
     .menu-list { display: flex; flex-direction: column; gap: 10px; }
-    .menu-item-btn { background: #182238; border: 1px solid #23314a; color: #f3f4f6; padding: 14px 16px; border-radius: 12px; font-weight: 800; font-size: 0.95rem; text-align: left; cursor: pointer; display: flex; align-items: center; justify-content: space-between; transition: background 0.2s; }
-    .menu-item-btn:active { background: #1f2d48; }
+    .menu-item-btn { background: #182238; border: 1px solid #23314a; color: #f3f4f6; padding: 14px 16px; border-radius: 12px; font-weight: 800; font-size: 0.95rem; text-align: left; cursor: pointer; display: flex; align-items: center; justify-content: space-between; }
 
-    /* TELAS INTERNAS DO MENU */
     .view-dicas { display: none; }
     .btn-voltar-menu { background: transparent; border: none; color: #10b981; font-weight: 800; font-size: 0.9rem; cursor: pointer; display: flex; align-items: center; gap: 6px; margin-bottom: 18px; }
-
-    /* CARDS DE QUALIDADE DE VÍDEO */
-    .video-guide-box { display: flex; flex-direction: column; gap: 12px; }
-    .v-card { background: #182238; border: 1px solid #23314a; padding: 14px; border-radius: 12px; }
-    .v-card.recommended { border-color: #10b981; background: #062e24; }
-    .v-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
-    .v-title { font-weight: 800; font-size: 0.9rem; color: #fff; }
-    .v-badge { background: #10b981; color: #000; font-size: 0.65rem; font-weight: 900; padding: 2px 6px; border-radius: 4px; text-transform: uppercase; }
-    .v-time { color: #f59e0b; font-weight: 800; font-size: 0.85rem; margin-bottom: 4px; }
-    .v-desc { color: #9ca3af; font-size: 0.78rem; line-height: 1.4; }
-    .v-tip { background: #1e293b; border: 1px dashed #f59e0b; padding: 12px; border-radius: 10px; margin-top: 6px; color: #fbbf24; font-size: 0.8rem; line-height: 1.4; }
 
     /* ACCORDION DICAS */
     .faq-container { display: flex; flex-direction: column; gap: 12px; }
@@ -103,6 +91,546 @@
     .details-author { font-size: 0.85rem; color: #9ca3af; }
 
     .btn-download-big { width: 100%; background: #10b981; color: #000; font-weight: 900; font-size: 1rem; padding: 14px; border-radius: 10px; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 8px; border: none; cursor: pointer; margin-top: 15px; }
+    .btn-delete-own { width: 100%; background: #ef4444; color: #fff; font-weight: 800; font-size: 0.85rem; padding: 10px; border-radius: 10px; border: none; cursor: pointer; margin-top: 10px; display: none; }
+
+    .tab-bar { display: flex; gap: 10px; border-bottom: 1px solid #1f293d; margin-bottom: 15px; }
+    .tab-item { background: transparent; color: #9ca3af; font-weight: 800; font-size: 0.85rem; padding: 10px 14px; border: none; cursor: pointer; white-space: nowrap; }
+    .tab-item.active { color: #34d399; border-bottom: 2px solid #10b981; }
+
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    .details-text { color: #9ca3af; font-size: 0.9rem; line-height: 1.6; background: #131b2e; border: 1px solid #1f293d; padding: 18px; border-radius: 14px; }
+    .gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
+    .gallery-grid img { width: 100%; height: 110px; object-fit: cover; border-radius: 10px; border: 1px solid #1f293d; }
+    .video-container { position: relative; width: 100%; border-radius: 12px; border: 1px solid #1f293d; overflow: hidden; background: #000; }
+    .video-container iframe, .video-container video { width: 100%; height: 220px; border: 0; }
+
+    /* MODAL PUBLICAR */
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 99; justify-content: center; align-items: center; padding: 15px; }
+    .modal { background: #131b2e; border: 1px solid #2d3748; padding: 20px; border-radius: 14px; width: 100%; max-width: 480px; max-height: 90vh; overflow-y: auto; }
+    .modal h2 { margin-bottom: 15px; font-size: 1.2rem; color: #fff; }
+    .form-group { margin-bottom: 14px; }
+    .form-group label { display: block; font-size: 0.75rem; font-weight: 800; color: #9ca3af; margin-bottom: 5px; text-transform: uppercase; }
+    .modal input, .modal select, .modal textarea { width: 100%; padding: 11px; background: #161e2e; border: 1px solid #2d3748; border-radius: 8px; color: #fff; outline: none; font-size: 0.85rem; }
+    .file-input-btn { background: #1e293b; border: 1px dashed #3b82f6; color: #60a5fa; padding: 12px; border-radius: 8px; text-align: center; cursor: pointer; font-size: 0.8rem; font-weight: 700; display: block; margin-bottom: 6px; }
+    .file-input-btn input { display: none; }
+    .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 15px; }
+    .btn-cancel { background: #334155; color: #fff; padding: 10px 16px; border-radius: 8px; border: none; cursor: pointer; font-weight: 700; }
+    .status-msg { font-size: 0.85rem; color: #34d399; font-weight: 700; margin-top: 10px; text-align: center; word-break: break-word; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="logo">SP Addons <span>BEDROCK</span></div>
+    <div class="header-actions">
+      <button class="btn-publish-open" onclick="toggleModal(true)">+ Publicar</button>
+      <button class="btn-menu" onclick="toggleDrawer(true)" aria-label="Abrir Menu">☰</button>
+    </div>
+  </header>
+
+  <!-- MENU LATERAL -->
+  <div class="drawer-overlay" id="drawerOverlay" onclick="toggleDrawer(false)"></div>
+  <div class="drawer" id="drawerMenu">
+    <div class="drawer-header">
+      <div class="drawer-title" id="drawerTitle">Menu</div>
+      <button class="btn-close-drawer" onclick="toggleDrawer(false)">✕</button>
+    </div>
+
+    <div id="viewMenuMain" class="menu-list">
+      <button class="menu-item-btn" onclick="openDicasView()">
+        <span>💡 Dicas e Dúvidas</span>
+        <span>➔</span>
+      </button>
+    </div>
+
+    <div id="viewMenuDicas" class="view-dicas">
+      <button class="btn-voltar-menu" onclick="backToMenuMain()">← Voltar ao Menu</button>
+      <div class="faq-container">
+        <div class="faq-item" onclick="toggleFaq(this)">
+          <div class="faq-header">
+            <div class="faq-title-box">
+              <span class="faq-icon">⚡</span>
+              <span class="faq-title">Como publicar um mod?</span>
+            </div>
+            <span class="faq-arrow">▼</span>
+          </div>
+          <div class="faq-body">
+            1. Clique em <b>+ Publicar</b>.<br>
+            2. Selecione a foto, o arquivo do mod e o vídeo.<br>
+            3. O sistema envia em pedaços com progresso em %!<br>
+            4. Clique em <b>Enviar e Publicar</b>.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CATÁLOGO -->
+  <div id="catalog-page">
+    <div class="categories">
+      <button class="cat-btn active" onclick="setCategory('Todos', this)">Todos</button>
+      <button class="cat-btn" onclick="setCategory('Add-ons Bedrock', this)">Add-ons Bedrock</button>
+      <button class="cat-btn" onclick="setCategory('Texturas', this)">Texturas</button>
+      <button class="cat-btn" onclick="setCategory('Mapas', this)">Mapas</button>
+    </div>
+
+    <div class="search-box">
+      <input type="text" id="searchInput" placeholder="Buscar conteúdos..." onkeyup="filterAddons()">
+    </div>
+
+    <div class="counter" id="addonCount">Carregando conteúdos...</div>
+    <div class="addons-list" id="addons-container"></div>
+  </div>
+
+  <!-- DETALHES -->
+  <div id="details-page">
+    <button class="btn-back" onclick="showCatalog()">← VOLTAR PARA O CATÁLOGO</button>
+
+    <div class="details-card">
+      <div class="details-header">
+        <img id="d-img" class="details-img" src="" alt="Capa">
+        <div class="details-meta">
+          <span id="d-category" class="badge-cat">ADDONS</span>
+          <div id="d-title" class="details-title">Título</div>
+          <div class="details-author">Desenvolvido por <span id="d-author">Autor</span></div>
+        </div>
+      </div>
+
+      <a id="d-download" href="#" class="btn-download-big" download target="_blank">📥 Baixar Recurso</a>
+      <button id="d-delete-btn" class="btn-delete-own" onclick="excluirAddonAtual()">🗑️ Excluir meu Addon</button>
+    </div>
+
+    <div class="tab-bar">
+      <button class="tab-item active" onclick="switchTab('desc', this)">📄 Descrição</button>
+      <button class="tab-item" onclick="switchTab('gallery', this)">🖼️ Galeria</button>
+      <button class="tab-item" onclick="switchTab('video', this)">🎥 Vídeo</button>
+    </div>
+
+    <div id="tab-desc" class="tab-content active"><div id="d-desc" class="details-text"></div></div>
+    <div id="tab-gallery" class="tab-content"><div id="d-gallery" class="gallery-grid"></div></div>
+    <div id="tab-video" class="tab-content"><div id="d-video-box"></div></div>
+  </div>
+
+  <!-- MODAL PUBLICAR -->
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal">
+      <h2>Publicar Conteúdo</h2>
+      
+      <div class="form-group">
+        <label>Título e Autor</label>
+        <input type="text" id="pubTitle" placeholder="Ex: Ranzie Rise Addon" style="margin-bottom:6px;">
+        <input type="text" id="pubAuthor" placeholder="Seu Nome / Autor">
+      </div>
+
+      <div class="form-group">
+        <label>Categoria</label>
+        <select id="pubCategory">
+          <option value="Add-ons Bedrock">Add-ons Bedrock (.mcaddon)</option>
+          <option value="Texturas">Texturas (.mcpack)</option>
+          <option value="Mapas">Mapas (.mcworld)</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Imagem da Capa</label>
+        <label class="file-input-btn">
+          🖼️ Escolher Foto da Capa
+          <input type="file" id="pubImageFile" accept="image/*" onchange="previewFileName(this, 'capaName')">
+        </label>
+        <div id="capaName" style="font-size:0.75rem; color:#10b981; margin-bottom:4px;"></div>
+        <input type="url" id="pubImageUrl" placeholder="OU cole a URL da Imagem">
+      </div>
+
+      <div class="form-group">
+        <label>Arquivo do Addon / Mod</label>
+        <label class="file-input-btn" style="border-color:#10b981; color:#34d399;">
+          📦 Selecionar Arquivo (.mcpack / .mcaddon / .mcworld)
+          <input type="file" id="pubModFile" accept=".mcaddon,.mcpack,.mcworld,*/*" onchange="previewFileName(this, 'modFileName')">
+        </label>
+        <div id="modFileName" style="font-size:0.75rem; color:#10b981; margin-bottom:4px;"></div>
+        <input type="url" id="pubDownloadUrl" placeholder="OU cole o Link Direto de Download">
+      </div>
+
+      <div class="form-group">
+        <label>Galeria (Até 6 fotos)</label>
+        <label class="file-input-btn">
+          📷 Escolher Fotos da Galeria
+          <input type="file" id="pubGalleryFiles" accept="image/*" multiple onchange="checkGalleryFiles(this)">
+        </label>
+        <div id="galleryCount" style="font-size:0.75rem; color:#10b981;"></div>
+      </div>
+
+      <div class="form-group">
+        <label>Vídeo do Mod (Até 50 MB ou Link do YouTube)</label>
+        <label class="file-input-btn" style="border-color:#f59e0b; color:#fbbf24;">
+          🎬 Escolher Vídeo da Galeria do Celular
+          <input type="file" id="pubVideoFile" accept="video/*" onchange="previewFileName(this, 'videoFileName')">
+        </label>
+        <div id="videoFileName" style="font-size:0.75rem; color:#10b981; margin-bottom:4px;"></div>
+        <input type="url" id="pubVideoUrl" placeholder="OU cole o Link do YouTube">
+      </div>
+
+      <div class="form-group">
+        <label>Descrição</label>
+        <textarea id="pubDesc" placeholder="Descreva o que o mod adiciona..." rows="3"></textarea>
+      </div>
+
+      <div id="statusMsg" class="status-msg"></div>
+
+      <div class="modal-actions">
+        <button class="btn-cancel" onclick="toggleModal(false)">Cancelar</button>
+        <button id="btnSubmitPub" class="btn-publish-open" onclick="publicarAddon()">Enviar e Publicar</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://dsezdcusbhitmzjipvgy.supabase.co';
+    const SUPABASE_ANON_KEY = 'sb_publishable_Kodxv-JTmas50sItp-s3Gg_R8GMX5l_';
+    let allAddons = [];
+    let currentCategory = 'Todos';
+    let currentAddon = null;
+
+    function toggleDrawer(show) {
+      document.getElementById('drawerOverlay').classList.toggle('active', show);
+      document.getElementById('drawerMenu').classList.toggle('active', show);
+      if (!show) backToMenuMain();
+    }
+
+    function openDicasView() {
+      document.getElementById('viewMenuMain').style.display = 'none';
+      document.getElementById('viewMenuDicas').style.display = 'block';
+      document.getElementById('drawerTitle').innerText = 'Dicas e Dúvidas';
+    }
+
+    function backToMenuMain() {
+      document.getElementById('viewMenuDicas').style.display = 'none';
+      document.getElementById('viewMenuMain').style.display = 'flex';
+      document.getElementById('drawerTitle').innerText = 'Menu';
+    }
+
+    function toggleFaq(element) {
+      const isOpen = element.classList.contains('open');
+      document.querySelectorAll('.faq-item').forEach(item => item.classList.remove('open'));
+      if (!isOpen) element.classList.add('open');
+    }
+
+    function getMyCreatedIds() {
+      return JSON.parse(localStorage.getItem('my_created_addons') || '[]');
+    }
+
+    function saveMyCreatedId(id) {
+      const ids = getMyCreatedIds();
+      ids.push(id);
+      localStorage.setItem('my_created_addons', JSON.stringify(ids));
+    }
+
+    async function fetchAddons() {
+      try {
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/addons?select=*`, {
+          headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+        });
+        allAddons = await response.json();
+        filterAddons();
+      } catch (err) {
+        document.getElementById('addonCount').innerText = "Erro ao carregar conteúdos.";
+      }
+    }
+
+    function setCategory(category, button) {
+      currentCategory = category;
+      document.querySelectorAll('.cat-btn').forEach(btn => btn.classList.remove('active'));
+      button.classList.add('active');
+      filterAddons();
+    }
+
+    function filterAddons() {
+      const query = document.getElementById('searchInput').value.toLowerCase();
+      const filtered = allAddons.filter(item => {
+        const matchesCategory = (currentCategory === 'Todos') || (item.category === currentCategory);
+        const matchesSearch = item.title.toLowerCase().includes(query) || (item.description && item.description.toLowerCase().includes(query));
+        return matchesCategory && matchesSearch;
+      });
+      renderAddons(filtered);
+    }
+
+    function renderAddons(addons) {
+      const container = document.getElementById('addons-container');
+      const countEl = document.getElementById('addonCount');
+      container.innerHTML = '';
+      countEl.innerText = `${addons.length} conteúdos em "${currentCategory}"`;
+
+      if (addons.length === 0) {
+        container.innerHTML = '<p style="text-align:center; color:#6b7280; padding:30px;">Nenhum conteúdo encontrado.</p>';
+        return;
+      }
+
+      addons.forEach(addon => {
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.onclick = () => openDetails(addon);
+        card.innerHTML = `
+          <img src="${addon.image_url || 'https://via.placeholder.com/100'}" alt="${addon.title}">
+          <div class="card-info">
+            <div class="card-title">${addon.title}</div>
+            <div class="card-author">por ${addon.author || 'Comunidade'}</div>
+            <div class="card-desc">${addon.description || 'Sem descrição.'}</div>
+            <span class="tag">${addon.category || 'Addon'}</span>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function openDetails(addon) {
+      currentAddon = addon;
+      document.getElementById('d-img').src = addon.image_url || 'https://via.placeholder.com/100';
+      document.getElementById('d-category').innerText = addon.category || 'ADDON';
+      document.getElementById('d-title').innerText = addon.title;
+      document.getElementById('d-author').innerText = addon.author || 'Comunidade';
+      document.getElementById('d-desc').innerText = addon.description || 'Sem descrição cadastrada.';
+      
+      const downloadBtn = document.getElementById('d-download');
+      downloadBtn.href = addon.download_url;
+
+      const galleryBox = document.getElementById('d-gallery');
+      galleryBox.innerHTML = '';
+      let galleryList = addon.gallery_urls || [];
+      if (typeof galleryList === 'string') {
+        try { galleryList = JSON.parse(galleryList); } catch(e){ galleryList = []; }
+      }
+      if (galleryList.length > 0) {
+        galleryList.forEach(url => {
+          const img = document.createElement('img');
+          img.src = url;
+          galleryBox.appendChild(img);
+        });
+      } else {
+        galleryBox.innerHTML = '<p style="color:#6b7280; font-size:0.85rem;">Nenhuma foto cadastrada.</p>';
+      }
+
+      const videoBox = document.getElementById('d-video-box');
+      videoBox.innerHTML = '';
+      if (addon.video_url) {
+        const embedUrl = getYouTubeEmbedUrl(addon.video_url);
+        if (embedUrl) {
+          videoBox.innerHTML = `<div class="video-container"><iframe src="${embedUrl}" allowfullscreen></iframe></div>`;
+        } else {
+          videoBox.innerHTML = `<div class="video-container"><video src="${addon.video_url}" controls></video></div>`;
+        }
+      } else {
+        videoBox.innerHTML = '<p style="color:#6b7280; font-size:0.85rem;">Nenhum vídeo cadastrado.</p>';
+      }
+
+      const myIds = getMyCreatedIds();
+      document.getElementById('d-delete-btn').style.display = myIds.includes(addon.id) ? 'block' : 'none';
+
+      document.getElementById('catalog-page').style.display = 'none';
+      document.getElementById('details-page').style.display = 'block';
+      window.scrollTo(0, 0);
+    }
+
+    function switchTab(tabName, btn) {
+      document.querySelectorAll('.tab-item').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById(`tab-${tabName}`).classList.add('active');
+    }
+
+    function getYouTubeEmbedUrl(url) {
+      const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+      const match = url.match(regExp);
+      return (match && match[2].length === 11) ? `https://www.youtube.com/embed/${match[2]}` : null;
+    }
+
+    function showCatalog() {
+      document.getElementById('details-page').style.display = 'none';
+      document.getElementById('catalog-page').style.display = 'block';
+    }
+
+    function toggleModal(show) {
+      document.getElementById('modalOverlay').style.display = show ? 'flex' : 'none';
+    }
+
+    function previewFileName(input, targetId) {
+      if (input.files && input.files[0]) {
+        document.getElementById(targetId).innerText = `Selecionado: ${input.files[0].name}`;
+      }
+    }
+
+    function checkGalleryFiles(input) {
+      if (input.files && input.files.length > 6) {
+        alert("⚠️ Selecione no máximo 6 fotos!");
+        input.value = "";
+        document.getElementById('galleryCount').innerText = "";
+        return;
+      }
+      if (input.files) {
+        document.getElementById('galleryCount').innerText = `${input.files.length} foto(s) selecionada(s).`;
+      }
+    }
+
+    // UPLOAD EM PEDAÇOS (TUS PROTOCOL) - IDENTICO AO ZXKO
+    function uploadWithTus(file, progressCallback) {
+      return new Promise((resolve, reject) => {
+        const cleanName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+        const fileName = `${Date.now()}_${cleanName}`;
+
+        const upload = new tus.Upload(file, {
+          endpoint: `${SUPABASE_URL}/storage/v1/upload/resumable`,
+          retryDelays: [0, 3000, 5000, 10000],
+          headers: {
+            authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            apikey: SUPABASE_ANON_KEY,
+            'x-upsert': 'true'
+          },
+          uploadDataDuringCreation: true,
+          removeFingerprintOnSuccess: true,
+          metadata: {
+            bucketName: 'addons-media',
+            objectName: fileName,
+            contentType: file.type || 'application/octet-stream',
+            cacheControl: '3600'
+          },
+          chunkSize: 6 * 1024 * 1024, // Pedaços de 6MB para celular
+          onError: function (error) {
+            reject(error);
+          },
+          onProgress: function (bytesUploaded, bytesTotal) {
+            const percentage = ((bytesUploaded / bytesTotal) * 100).toFixed(0);
+            if (progressCallback) progressCallback(percentage);
+          },
+          onSuccess: function () {
+            const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/addons-media/${fileName}`;
+            resolve(publicUrl);
+          }
+        });
+
+        upload.start();
+      });
+    }
+
+    async function publicarAddon() {
+      const title = document.getElementById('pubTitle').value.trim();
+      const author = document.getElementById('pubAuthor').value.trim() || 'Comunidade';
+      const category = document.getElementById('pubCategory').value;
+      const description = document.getElementById('pubDesc').value.trim();
+
+      const imageFileInput = document.getElementById('pubImageFile');
+      let image_url = document.getElementById('pubImageUrl').value.trim();
+
+      const modFileInput = document.getElementById('pubModFile');
+      let download_url = document.getElementById('pubDownloadUrl').value.trim();
+
+      const videoFileInput = document.getElementById('pubVideoFile');
+      let video_url = document.getElementById('pubVideoUrl').value.trim();
+
+      const galleryFilesInput = document.getElementById('pubGalleryFiles');
+      const status = document.getElementById('statusMsg');
+      const submitBtn = document.getElementById('btnSubmitPub');
+
+      if (!title) {
+        alert("Digite o título do Addon!");
+        return;
+      }
+
+      submitBtn.disabled = true;
+      status.style.color = "#34d399";
+
+      try {
+        if (imageFileInput.files && imageFileInput.files[0]) {
+          status.innerText = "⏳ Enviando imagem de capa...";
+          image_url = await uploadWithTus(imageFileInput.files[0]);
+        }
+
+        if (modFileInput.files && modFileInput.files[0]) {
+          status.innerText = "⏳ Enviando arquivo do mod (0%)...";
+          download_url = await uploadWithTus(modFileInput.files[0], (pct) => {
+            status.innerText = `⏳ Enviando arquivo do mod (${pct}%)...`;
+          });
+        }
+
+        if (!download_url) {
+          alert("Selecione um arquivo de mod ou informe o link!");
+          submitBtn.disabled = false;
+          status.innerText = "";
+          return;
+        }
+
+        if (videoFileInput.files && videoFileInput.files[0]) {
+          status.innerText = "⏳ Enviando vídeo (0%)...";
+          video_url = await uploadWithTus(videoFileInput.files[0], (pct) => {
+            status.innerText = `⏳ Enviando vídeo (${pct}%)... Não feche esta tela!`;
+          });
+        }
+
+        let gallery_urls = [];
+        if (galleryFilesInput.files && galleryFilesInput.files.length > 0) {
+          const totalFiles = Math.min(galleryFilesInput.files.length, 6);
+          for (let i = 0; i < totalFiles; i++) {
+            status.innerText = `⏳ Enviando foto ${i + 1} de ${totalFiles}...`;
+            const gUrl = await uploadWithTus(galleryFilesInput.files[i]);
+            if (gUrl) gallery_urls.push(gUrl);
+          }
+        }
+
+        status.innerText = "⏳ Finalizando publicação...";
+
+        const novo = {
+          title, author, category, description, video_url,
+          image_url: image_url || 'https://via.placeholder.com/400x200',
+          download_url, gallery_urls, version: 'Bedrock'
+        };
+
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/addons`, {
+          method: 'POST',
+          headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation'
+          },
+          body: JSON.stringify(novo)
+        });
+
+        if (res.ok) {
+          const created = await res.json();
+          if (created && created.length > 0) saveMyCreatedId(created[0].id);
+          alert("🎉 Publicado com sucesso!");
+          toggleModal(false);
+          fetchAddons();
+        } else {
+          alert("Erro ao salvar dados no banco: " + await res.text());
+        }
+      } catch (e) {
+        status.style.color = "#ef4444";
+        status.innerText = "❌ Falha no envio!";
+        alert("Erro no upload: " + e.message);
+      } finally {
+        submitBtn.disabled = false;
+      }
+    }
+
+    async function excluirAddonAtual() {
+      if (!currentAddon || !confirm("Excluir este addon permanentemente?")) return;
+
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/addons?id=eq.${currentAddon.id}`, {
+        method: 'DELETE',
+        headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+      });
+
+      if (res.ok) {
+        alert("Addon excluído!");
+        showCatalog();
+        fetchAddons();
+      }
+    }
+
+    fetchAddons();
+  </script>
+</body>
+</html>
     .btn-delete-own { width: 100%; background: #ef4444; color: #fff; font-weight: 800; font-size: 0.85rem; padding: 10px; border-radius: 10px; border: none; cursor: pointer; margin-top: 10px; display: none; }
 
     .tab-bar { display: flex; gap: 10px; border-bottom: 1px solid #1f293d; margin-bottom: 15px; }
